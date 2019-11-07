@@ -1,0 +1,34 @@
+output_dir: /nfs/diskstation/projects/mech_search/prob_pose/benchmark_results
+save_conf_name: config.yaml
+
+model:
+  path: /nfs/diskstation/projects/mech_search/prob_pose/models/test20191106T1425/mask_rcnn_test_0010.h5
+  mode: inference
+  settings:
+    image_shape: [512, 512]
+    image_channel_count: 3
+    mean_pixel: [128,128,128]
+    backbone: resnet35
+    post_nms_rois_inference: 2000
+    rpn_nms_threshold: 1.0
+    detection_nms_threshold: 0.35
+
+dataset:
+  path: /nfs/diskstation/projects/mech_search/prob_pose/datasets/dataset_test_11_1/images
+  images: color_ims
+  dists: dist_ims
+  indices: test_indices.npy
+
+# Visualization settings
+vis:
+  # Prediction vis settings
+  predictions: 1
+  show_bbox_pred: 1
+  show_scores_pred: 0
+  show_class_pred: 0
+
+  # GT vis settings
+  ground_truth: 1
+  show_bbox_gt: 1
+  show_scores_gt: 0
+  show_class_gt: 0
