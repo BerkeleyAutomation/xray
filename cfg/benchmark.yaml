@@ -22,13 +22,13 @@ dataset:
 # Visualization settings
 vis:
   # Prediction vis settings
-  predictions: 0
+  predictions: 1
   show_bbox_pred: 1
   show_scores_pred: 0
   show_class_pred: 0
 
   # GT vis settings
-  ground_truth: 0
+  ground_truth: 1
   show_bbox_gt: 1
   show_scores_gt: 0
   show_class_gt: 0

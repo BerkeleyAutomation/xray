@@ -27,7 +27,7 @@ Please edit "cfg/benchmark.yaml" to specify the necessary parameters for that ta
 Run this file with the tag --config [config file name] if different config from the default location (cfg/benchmark.yaml).
 
 Here is an example run command (GPU selection included):
-CUDA_VISIBLE_DEVICES=0 python tools/benchmark.py --config cfg/benchmark.yaml
+CUDA_VISIBLE_DEVICES=0 python tools/benchmark.py
 """
 
 import os
@@ -169,14 +169,14 @@ def visualize_predictions(run_dir, dataset, inference_config, pred_info_dir, sho
             image = np.repeat(image, 3, axis=2)
 
         # load mask and info
-        r = np.load(os.path.join(pred_info_dir, 'image_{:06}.npy'.format(image_id))).item()
+        r = np.load(os.path.join(pred_info_dir, 'image_{:06}.npy'.format(image_id)), allow_pickle=True).item()
 
         # Visualize
         scores = r['scores'] if show_scores else None
         fig = plt.figure(figsize=(1.7067, 1.7067), dpi=300, frameon=False)
         ax = plt.Axes(fig, [0.,0.,1.,1.])
         fig.add_axes(ax)
-        visualize.display_instances(image, ax, r['rois'], r['class_ids'], ['bg', 'obj'], 
+        visualize.display_instances(image, ax, r['rois'], r['class_ids'], ['bg', 'obj'], colors=['r']*len(r['class_ids']),
                                     scores=scores, show_bbox=show_bbox, show_class=show_class)
         file_name = os.path.join(vis_dir, 'vis_{:06d}'.format(image_id))
         fig.savefig(file_name, transparent=True, dpi=300)
@@ -204,8 +204,8 @@ def visualize_gts(run_dir, dataset, inference_config, show_bbox=True, show_score
         fig = plt.figure(figsize=(1.7067, 1.7067), dpi=300, frameon=False)
         ax = plt.Axes(fig, [0.,0.,1.,1.])
         fig.add_axes(ax)
-        visualize.display_instances(image, ax, gt_bbox, gt_class_id, ['bg', 'obj'], 
-                                    scores, show_bbox=show_bbox, show_class=show_class)
+        visualize.display_instances(image, ax, gt_bbox, gt_class_id, ['bg', 'obj'], colors=['g']*len(gt_class_id),
+                                    scores=scores, show_bbox=show_bbox, show_class=show_class)
         file_name = os.path.join(vis_dir, 'gt_vis_{:06d}'.format(image_id))
         height, width = image.shape[:2]
         fig.savefig(file_name, transparent=True, dpi=300)
@@ -229,7 +229,7 @@ def visualize_differences(run_dir, dataset, inference_config, pred_info_dir, sho
             image = np.repeat(image, 3, axis=2)
 
         # load mask and info
-        r = np.load(os.path.join(pred_info_dir, 'image_{:06}.npy'.format(image_id))).item()
+        r = np.load(os.path.join(pred_info_dir, 'image_{:06}.npy'.format(image_id)), allow_pickle=True).item()
 
         # Visualize
         fig = plt.figure(figsize=(1.7067, 1.7067), dpi=300, frameon=False)
