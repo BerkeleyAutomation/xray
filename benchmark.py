@@ -88,7 +88,8 @@ def benchmark(config):
     # Create predictions and record where everything gets stored.
     pred_info_dir = detect(config['output_dir'], inference_config, model, test_dataset)
 
-    # ap, ar = coco_benchmark(pred_mask_dir, pred_info_dir, gt_mask_dir)
+    ap, ap50, ap75, ar = calculate_ap_ar(test_dataset, inference_config, pred_info_dir, display=True)
+
     if config['vis']['predictions']:
         visualize_predictions(config['output_dir'], test_dataset, inference_config, pred_info_dir, 
                               show_bbox=config['vis']['show_bbox_pred'], show_scores=config['vis']['show_scores_pred'], show_class=config['vis']['show_class_pred'])
@@ -100,7 +101,7 @@ def benchmark(config):
                               show_bbox=config['vis']['show_bbox_pred'], show_scores=config['vis']['show_scores_pred'], show_class=config['vis']['show_class_pred'])
     
     print("Saved benchmarking output to {}.\n".format(config['output_dir']))
-    # return ap, ar
+    return ap, ar
 
 def detect(run_dir, inference_config, model, dataset):
     """
@@ -152,6 +153,44 @@ def detect(run_dir, inference_config, model, dataset):
 
     return pred_info_dir
 
+def calculate_ap_ar(dataset, inference_config, pred_info_dir, display=True):
+    """Calculates AP and AR from predictions."""
+
+    total_image_ids = len(dataset.image_ids)
+    mAPrange = 0
+    mAR = 0
+    mAP50 = 0
+    mAP75 = 0
+    
+    for image_id in tqdm(dataset.image_ids):
+        
+        # Load image and ground truth data
+        image, _, gt_class_id, gt_bbox = modellib.load_image_gt(dataset, inference_config, image_id)
+        if inference_config.IMAGE_CHANNEL_COUNT == 1:
+            image = np.repeat(image, 3, axis=2)
+
+        # load info and calculate AP/AR
+        r = np.load(os.path.join(pred_info_dir, 'image_{:06}.npy'.format(image_id)), allow_pickle=True).item()
+        mAPrange += utils.compute_ap_range(gt_bbox, gt_class_id, r['rois'], r['class_ids'], r['scores'], verbose=False)
+        mAP50 += utils.compute_ap(gt_bbox, gt_class_id, r['rois'], r['class_ids'], r['scores'])[0]
+        mAP75 += utils.compute_ap(gt_bbox, gt_class_id, r['rois'], r['class_ids'], r['scores'], iou_threshold=0.75)[0]
+        AR = 0.0
+        for iou in np.linspace(0.5, 0.95, 10):
+            AR += utils.compute_recall(r['rois'], gt_bbox, iou)[0] / 10.0
+        mAR += AR
+
+    mAPrange /= total_image_ids
+    mAP50 /= total_image_ids
+    mAP75 /= total_image_ids
+    mAR /= total_image_ids
+    
+    if display:
+        table = [['AP 0.5:0.95', 'AP 0.5', 'AP 0.75', 'AR'],
+                 ['{:.3f}'.format(mAPrange), '{:.3f}'.format(mAP50), '{:.3f}'.format(mAP75), '{:.3f}'.format(mAR)]]
+        visualize.display_table(table)
+    
+    return mAPrange, mAP50, mAP75, mAR
+
 def visualize_predictions(run_dir, dataset, inference_config, pred_info_dir, show_bbox=True, show_scores=True, show_class=True):
     """Visualizes predictions."""
     # Create subdirectory for prediction visualizations
@@ -168,7 +207,7 @@ def visualize_predictions(run_dir, dataset, inference_config, pred_info_dir, sho
         if inference_config.IMAGE_CHANNEL_COUNT == 1:
             image = np.repeat(image, 3, axis=2)
 
-        # load mask and info
+        # load info
         r = np.load(os.path.join(pred_info_dir, 'image_{:06}.npy'.format(image_id)), allow_pickle=True).item()
 
         # Visualize

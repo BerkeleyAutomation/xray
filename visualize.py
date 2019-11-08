@@ -330,39 +330,9 @@ def display_table(table):
     """Display values in a table format.
     table: an iterable of rows, and each row is an iterable of values.
     """
-    html = ""
-    for row in table:
-        row_html = ""
-        for col in row:
-            row_html += "<td>{:40}</td>".format(str(col))
-        html += "<tr>" + row_html + "</tr>"
-    html = "<table>" + html + "</table>"
-    IPython.display.display(IPython.display.HTML(html))
-
-
-def display_weight_stats(model):
-    """Scans all the weights in the model and returns a list of tuples
-    that contain stats about each weight.
-    """
-    layers = model.get_trainable_layers()
-    table = [["WEIGHT NAME", "SHAPE", "MIN", "MAX", "STD"]]
-    for l in layers:
-        weight_values = l.get_weights()  # list of Numpy arrays
-        weight_tensors = l.weights  # list of TF tensors
-        for i, w in enumerate(weight_values):
-            weight_name = weight_tensors[i].name
-            # Detect problematic layers. Exclude biases of conv layers.
-            alert = ""
-            if w.min() == w.max() and not (l.__class__.__name__ == "Conv2D" and i == 1):
-                alert += "<span style='color:red'>*** dead?</span>"
-            if np.abs(w.min()) > 1000 or np.abs(w.max()) > 1000:
-                alert += "<span style='color:red'>*** Overflow?</span>"
-            # Add row
-            table.append([
-                weight_name + alert,
-                str(w.shape),
-                "{:+9.4f}".format(w.min()),
-                "{:+10.4f}".format(w.max()),
-                "{:+9.4f}".format(w.std()),
-            ])
-    display_table(table)
+    from prettytable import PrettyTable
+    x = PrettyTable()
+    x.field_names = table[0]
+    for row in table[1:]:
+        x.add_row(row)
+    print(x)

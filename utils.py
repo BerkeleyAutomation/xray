@@ -472,8 +472,8 @@ def compute_matches(gt_boxes, gt_class_ids,
     return gt_match, pred_match, overlaps
 
 
-def compute_ap(gt_boxes, gt_class_ids, gt_masks,
-               pred_boxes, pred_class_ids, pred_scores, pred_masks,
+def compute_ap(gt_boxes, gt_class_ids,
+               pred_boxes, pred_class_ids, pred_scores,
                iou_threshold=0.5):
     """Compute Average Precision at a set IoU threshold (default 0.5).
 
@@ -485,12 +485,12 @@ def compute_ap(gt_boxes, gt_class_ids, gt_masks,
     """
     # Get matches and overlaps
     gt_match, pred_match, overlaps = compute_matches(
-        gt_boxes, gt_class_ids, gt_masks,
-        pred_boxes, pred_class_ids, pred_scores, pred_masks,
+        gt_boxes, gt_class_ids,
+        pred_boxes, pred_class_ids, pred_scores,
         iou_threshold)
 
     # Compute precision and recall at each prediction box step
-    precisions = np.cumsum(pred_match > -1) / float((np.arange(len(pred_match)) + 1))
+    precisions = np.cumsum(pred_match > -1) / (np.arange(len(pred_match)) + 1.0)
     recalls = np.cumsum(pred_match > -1).astype(np.float32) / float(len(gt_match))
 
     # Pad with start and end values to simplify the math
@@ -511,8 +511,8 @@ def compute_ap(gt_boxes, gt_class_ids, gt_masks,
     return mAP, precisions, recalls, overlaps
 
 
-def compute_ap_range(gt_box, gt_class_id, gt_mask,
-                     pred_box, pred_class_id, pred_score, pred_mask,
+def compute_ap_range(gt_box, gt_class_id,
+                     pred_box, pred_class_id, pred_score,
                      iou_thresholds=None, verbose=1):
     """Compute AP over a range or IoU thresholds. Default range is 0.5-0.95."""
     # Default is 0.5 to 0.95 with increments of 0.05
@@ -522,8 +522,8 @@ def compute_ap_range(gt_box, gt_class_id, gt_mask,
     AP = []
     for iou_threshold in iou_thresholds:
         ap, precisions, recalls, overlaps =\
-            compute_ap(gt_box, gt_class_id, gt_mask,
-                        pred_box, pred_class_id, pred_score, pred_mask,
+            compute_ap(gt_box, gt_class_id,
+                        pred_box, pred_class_id, pred_score,
                         iou_threshold=iou_threshold)
         if verbose:
             print("AP @{:.2f}:\t {:.3f}".format(iou_threshold, ap))
