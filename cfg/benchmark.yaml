@@ -2,7 +2,7 @@ output_dir: /nfs/diskstation/projects/mech_search/prob_pose/benchmark_results
 save_conf_name: config.yaml
 
 model:
-  path: /nfs/diskstation/projects/mech_search/prob_pose/models/test20191106T1425/mask_rcnn_test_0010.h5
+  path: /nfs/diskstation/projects/mech_search/prob_pose/models/test20191106T1425/mask_rcnn_test_0020.h5
   mode: inference
   settings:
     image_shape: [512, 512]
@@ -22,13 +22,16 @@ dataset:
 # Visualization settings
 vis:
   # Prediction vis settings
-  predictions: 1
+  predictions: 0
   show_bbox_pred: 1
   show_scores_pred: 0
   show_class_pred: 0
 
   # GT vis settings
-  ground_truth: 1
+  ground_truth: 0
   show_bbox_gt: 1
   show_scores_gt: 0
   show_class_gt: 0
+
+  # Visualize GT and predictions together
+  diffs: 0

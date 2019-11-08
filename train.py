@@ -58,19 +58,23 @@ def train(config):
     # Create directory if it doesn't currently exist
     utils.mkdir_if_missing(config['model']['path'])
 
-    import matplotlib.pyplot as plt
-    from matplotlib.patches import Rectangle as R
-    for i in np.arange(0, 100, 5):
-        im,_,_,bbox = modellib.load_image_gt(dataset_train, train_config, i*4)
-        fig, ax = plt.subplots(1)
-        ax.imshow(im)
-        for j in range(len(bbox)):
-            r = R(np.roll(bbox[j,:2], 1), 40, 40, linewidth=1, edgecolor='r', facecolor='none')
-            ax.add_patch(r)
-        ax.axis('off')
-        fig.savefig('/nfs/diskstation/projects/mech_search/prob_pose/example_inputs/image_{:06d}.png'.format(i), bbox_inches='tight', pad_inches=0)
-        # plt.show()
-    exit(0)
+    # For visualizing training images with GT boxes
+    # import matplotlib.pyplot as plt
+    # from matplotlib.patches import Rectangle as R
+    # for i in np.arange(0, 100, 5):
+    #     im,_,_,bbox = modellib.load_image_gt(dataset_train, train_config, i*4)
+    #     fig = plt.figure(figsize=(1.7067, 1.7067), dpi=300, frameon=False)
+    #     ax = plt.Axes(fig, [0.,0.,1.,1.])
+    #     fig.add_axes(ax)
+    #     ax.imshow(im)
+    #     for j in range(len(bbox)):
+    #         r = R(np.roll(bbox[j,:2], 1), 40, 40, linewidth=1, edgecolor='r', facecolor='none')
+    #         ax.add_patch(r)
+    #     ax.axis('off')
+    #     fig.savefig('/nfs/diskstation/projects/mech_search/prob_pose/example_inputs/image_{:06d}.png'.format(i), transparent=True, dpi=300)
+    #     # plt.show()
+    # exit(0)
+    
     # Create the model.
     model = modellib.MaskRCNN(mode='training', config=train_config,
                               model_dir=config['model']['path'])

@@ -94,7 +94,11 @@ def benchmark(config):
                               show_bbox=config['vis']['show_bbox_pred'], show_scores=config['vis']['show_scores_pred'], show_class=config['vis']['show_class_pred'])
     if config['vis']['ground_truth']:
         visualize_gts(config['output_dir'], test_dataset, inference_config, show_scores=False, show_bbox=config['vis']['show_bbox_gt'], show_class=config['vis']['show_class_gt'])
-
+    
+    if config['vis']['diffs']:
+        visualize_differences(config['output_dir'], test_dataset, inference_config, pred_info_dir, 
+                              show_bbox=config['vis']['show_bbox_pred'], show_scores=config['vis']['show_scores_pred'], show_class=config['vis']['show_class_pred'])
+    
     print("Saved benchmarking output to {}.\n".format(config['output_dir']))
     # return ap, ar
 
@@ -172,8 +176,8 @@ def visualize_predictions(run_dir, dataset, inference_config, pred_info_dir, sho
         fig = plt.figure(figsize=(1.7067, 1.7067), dpi=300, frameon=False)
         ax = plt.Axes(fig, [0.,0.,1.,1.])
         fig.add_axes(ax)
-        visualize.display_instances(image, r['rois'], r['class_ids'], ['bg', 'obj'], 
-                                    ax=ax, scores=scores, show_bbox=show_bbox, show_class=show_class)
+        visualize.display_instances(image, ax, r['rois'], r['class_ids'], ['bg', 'obj'], 
+                                    scores=scores, show_bbox=show_bbox, show_class=show_class)
         file_name = os.path.join(vis_dir, 'vis_{:06d}'.format(image_id))
         fig.savefig(file_name, transparent=True, dpi=300)
         plt.close()
@@ -200,10 +204,42 @@ def visualize_gts(run_dir, dataset, inference_config, show_bbox=True, show_score
         fig = plt.figure(figsize=(1.7067, 1.7067), dpi=300, frameon=False)
         ax = plt.Axes(fig, [0.,0.,1.,1.])
         fig.add_axes(ax)
-        visualize.display_instances(image, gt_bbox, gt_class_id, ['bg', 'obj'], 
-                                    scores, ax=ax, show_bbox=show_bbox, show_class=show_class)
+        visualize.display_instances(image, ax, gt_bbox, gt_class_id, ['bg', 'obj'], 
+                                    scores, show_bbox=show_bbox, show_class=show_class)
         file_name = os.path.join(vis_dir, 'gt_vis_{:06d}'.format(image_id))
         height, width = image.shape[:2]
+        fig.savefig(file_name, transparent=True, dpi=300)
+        plt.close()
+
+
+def visualize_differences(run_dir, dataset, inference_config, pred_info_dir, show_bbox=True, show_scores=True, show_class=True):
+    """Visualizes predictions."""
+    # Create subdirectory for prediction visualizations
+    vis_dir = os.path.join(run_dir, 'diff_vis')
+    utils.mkdir_if_missing(vis_dir)
+
+    # Feed images into model one by one. For each image visualize predictions
+    image_ids = dataset.image_ids
+
+    print('VISUALIZING PREDICTIONS')
+    for image_id in tqdm(image_ids):
+        # Load image and ground truth data and resize for net
+        image, _, gt_class_id, gt_bbox = modellib.load_image_gt(dataset, inference_config, image_id)
+        if inference_config.IMAGE_CHANNEL_COUNT == 1:
+            image = np.repeat(image, 3, axis=2)
+
+        # load mask and info
+        r = np.load(os.path.join(pred_info_dir, 'image_{:06}.npy'.format(image_id))).item()
+
+        # Visualize
+        fig = plt.figure(figsize=(1.7067, 1.7067), dpi=300, frameon=False)
+        ax = plt.Axes(fig, [0.,0.,1.,1.])
+        fig.add_axes(ax)
+        visualize.display_differences(image, ax, gt_bbox, gt_class_id, r['rois'], 
+                                      r['class_ids'], r['scores'], ['bg', 'obj'], 
+                                      show_bbox=show_bbox)
+
+        file_name = os.path.join(vis_dir, 'diff_vis_{:06d}'.format(image_id))
         fig.savefig(file_name, transparent=True, dpi=300)
         plt.close()
 
