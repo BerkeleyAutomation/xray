@@ -40,8 +40,8 @@ def random_colors(N, bright=True):
 
 def display_instances(image, ax, boxes, class_ids, 
                       class_names, scores=None, 
-                      show_bbox=True, show_class=True,
-                      colors=None, captions=None, auto_show=False):
+                      show_class=True, colors=None, 
+                      captions=None, auto_show=False):
     """
     image: [h, w, c] image to display
     ax: figure axes to display on
@@ -71,10 +71,9 @@ def display_instances(image, ax, boxes, class_ids,
             # Skip this instance. Has no bbox. Likely lost in image cropping.
             continue
         y1, x1, y2, x2 = boxes[i]
-        if show_bbox:
-            p = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=1,
-                                alpha=0.7, edgecolor=color, facecolor='none')
-            ax.add_patch(p)
+        p = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=1,
+                            alpha=0.7, edgecolor=color, facecolor='none')
+        ax.add_patch(p)
 
         # Label
         if captions:
@@ -94,8 +93,7 @@ def display_instances(image, ax, boxes, class_ids,
 
 def display_differences(image, ax, gt_box, gt_class_id,
                         pred_box, pred_class_id, pred_score,
-                        class_names, show_bbox=True,
-                        iou_threshold=0.5, score_threshold=0.5):
+                        class_names, iou_threshold=0.5, score_threshold=0.5):
     """Display ground truth and prediction instances on the same image."""
     # Match predictions to ground truth
     gt_match, pred_match, overlaps = utils.compute_matches(
@@ -127,7 +125,6 @@ def display_differences(image, ax, gt_box, gt_class_id,
         image, ax,
         boxes, class_ids,
         class_names, scores,
-        show_bbox=show_bbox,
         colors=colors, captions=captions)
 
 

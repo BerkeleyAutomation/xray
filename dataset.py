@@ -114,15 +114,16 @@ class ImageDataset(object):
         image_info.update(kwargs)
         self.image_info.append(image_info)
 
-    def load(self, indices_file, augment=False):
+    def load(self, indices_file, max_inds=None, augment=False):
 
         # Load the indices for imset.
         split_file = os.path.join(self.base_path, '{:s}'.format(indices_file))
         self.image_id = np.load(split_file)
         self.add_class('clutter', 1, 'fg')
+        max_inds = max_inds or len(self.image_id)
 
         flips = [1, 2, 3]
-        for i in self.image_id:
+        for i in self.image_id[:max_inds]:
             if 'numpy' in self.images:
                 p = os.path.join(self.base_path, self.images,
                                 'image_{:06d}.npy'.format(i))
@@ -188,8 +189,8 @@ class ImageDataset(object):
 
     @property
     def indices(self):
-        return self.image_id[:100]
+        return self.image_id
 
     @property
     def image_ids(self):
-        return self._image_ids[:100]
+        return self._image_ids

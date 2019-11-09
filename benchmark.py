@@ -35,6 +35,7 @@ import argparse
 from tqdm import tqdm
 import numpy as np
 import skimage.io as io
+import skimage.morphology as skm
 from copy import copy
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -42,12 +43,10 @@ import tensorflow as tf
 from autolab_core import YamlConfig
 
 import utils
-from config import ProbabilityConfig
-from dataset import ImageDataset
-from sd_maskrcnn.coco_benchmark import coco_benchmark
-
 import model as modellib
 import visualize
+from config import ProbabilityConfig
+from dataset import ImageDataset
 
 def benchmark(config):
     """Benchmarks a model, computes and stores model predictions and then
@@ -78,7 +77,7 @@ def benchmark(config):
 
     # Create dataset
     test_dataset = ImageDataset(config)
-    test_dataset.load(config['dataset']['indices'])
+    test_dataset.load(config['dataset']['indices'], max_inds=config['dataset']['max_inds'])
     test_dataset.prepare()
 
     ######## BENCHMARK JUST CREATES THE RUN DIRECTORY ########
@@ -88,17 +87,21 @@ def benchmark(config):
     # Create predictions and record where everything gets stored.
     pred_info_dir = detect(config['output_dir'], inference_config, model, test_dataset)
 
-    ap, ap50, ap75, ar = calculate_ap_ar(test_dataset, inference_config, pred_info_dir, display=True)
+    ap, ap50, ap75, ar = calculate_metrics(test_dataset, inference_config, pred_info_dir, display=True)
 
-    if config['vis']['predictions']:
-        visualize_predictions(config['output_dir'], test_dataset, inference_config, pred_info_dir, 
-                              show_bbox=config['vis']['show_bbox_pred'], show_scores=config['vis']['show_scores_pred'], show_class=config['vis']['show_class_pred'])
-    if config['vis']['ground_truth']:
-        visualize_gts(config['output_dir'], test_dataset, inference_config, show_scores=False, show_bbox=config['vis']['show_bbox_gt'], show_class=config['vis']['show_class_gt'])
+    pred_config = config['vis']['pred']
+    gt_config = config['vis']['gt']
+    diff_config = config['vis']['diffs']
+    if pred_config['boxes'] or pred_config['dists']:
+        visualize_predictions(config['output_dir'], test_dataset, inference_config, pred_info_dir, show_dists=pred_config['dists'],
+                              show_boxes=pred_config['boxes'], show_scores=pred_config['scores'], show_class=pred_config['classes'])
+    if gt_config['boxes'] or gt_config['dists']:
+        visualize_gts(config['output_dir'], test_dataset, inference_config, show_dists=gt_config['dists'],
+                      show_boxes=gt_config['boxes'], show_scores=gt_config['scores'], show_class=gt_config['classes'])
     
-    if config['vis']['diffs']:
-        visualize_differences(config['output_dir'], test_dataset, inference_config, pred_info_dir, 
-                              show_bbox=config['vis']['show_bbox_pred'], show_scores=config['vis']['show_scores_pred'], show_class=config['vis']['show_class_pred'])
+    if diff_config['boxes'] or diff_config['dists']:
+        visualize_differences(config['output_dir'], test_dataset, inference_config, pred_info_dir, show_dists=diff_config['dists'],
+                              show_boxes=diff_config['boxes'], show_scores=diff_config['scores'], show_class=diff_config['classes'])
     
     print("Saved benchmarking output to {}.\n".format(config['output_dir']))
     return ap, ar
@@ -153,7 +156,7 @@ def detect(run_dir, inference_config, model, dataset):
 
     return pred_info_dir
 
-def calculate_ap_ar(dataset, inference_config, pred_info_dir, display=True):
+def calculate_metrics(dataset, inference_config, pred_info_dir, display=True):
     """Calculates AP and AR from predictions."""
 
     total_image_ids = len(dataset.image_ids)
@@ -161,6 +164,7 @@ def calculate_ap_ar(dataset, inference_config, pred_info_dir, display=True):
     mAR = 0
     mAP50 = 0
     mAP75 = 0
+    dist_metric = 0.0
     
     for image_id in tqdm(dataset.image_ids):
         
@@ -179,89 +183,146 @@ def calculate_ap_ar(dataset, inference_config, pred_info_dir, display=True):
             AR += utils.compute_recall(r['rois'], gt_bbox, iou)[0] / 10.0
         mAR += AR
 
+        gt_y_centers = np.mean(gt_bbox[:,::2], axis=1, dtype=np.int)
+        gt_x_centers = np.mean(gt_bbox[:,1::2], axis=1, dtype=np.int)
+        gt_dist = np.zeros_like(image[:,:,0], dtype=np.bool)
+        gt_dist[gt_y_centers, gt_x_centers] = True
+        gt_dist = skm.binary_dilation(gt_dist, selem=np.ones((8,8))).astype(np.uint8)
+
+        pred_y_centers = np.mean(r['rois'][:,::2], axis=1, dtype=np.int)
+        pred_x_centers = np.mean(r['rois'][:,1::2], axis=1, dtype=np.int)
+        pred_dist = np.zeros_like(image[:,:,0], dtype=np.bool)
+        pred_dist[pred_y_centers, pred_x_centers] = True
+        pred_dist = 2 * (skm.binary_dilation(pred_dist, selem=np.ones((8,8))).astype(np.uint8))
+
+        both_dist = pred_dist + gt_dist
+        intersection = np.sum(both_dist == 3)
+        union = np.sum(both_dist > 0)
+        dist_metric += float(intersection) / float(union)
+
     mAPrange /= total_image_ids
     mAP50 /= total_image_ids
     mAP75 /= total_image_ids
     mAR /= total_image_ids
+    dist_metric /= total_image_ids
     
     if display:
-        table = [['AP 0.5:0.95', 'AP 0.5', 'AP 0.75', 'AR'],
-                 ['{:.3f}'.format(mAPrange), '{:.3f}'.format(mAP50), '{:.3f}'.format(mAP75), '{:.3f}'.format(mAR)]]
+        table = [['AP 0.5:0.95', 'AP 0.5', 'AP 0.75', 'AR', 'Dist IoU'],
+                 ['{:.3f}'.format(mAPrange), '{:.3f}'.format(mAP50), '{:.3f}'.format(mAP75), 
+                  '{:.3f}'.format(mAR), '{:.3f}'.format(dist_metric)]]
         visualize.display_table(table)
     
     return mAPrange, mAP50, mAP75, mAR
 
-def visualize_predictions(run_dir, dataset, inference_config, pred_info_dir, show_bbox=True, show_scores=True, show_class=True):
+def visualize_predictions(run_dir, dataset, inference_config, pred_info_dir, 
+                          show_dists=True, show_boxes=True, show_scores=True, show_class=True):
     """Visualizes predictions."""
-    # Create subdirectory for prediction visualizations
-    vis_dir = os.path.join(run_dir, 'vis')
-    utils.mkdir_if_missing(vis_dir)
+    # Create subdirectories for visualizations
+    if show_dists:
+        dist_dir = os.path.join(run_dir, 'pred_dists')
+        utils.mkdir_if_missing(dist_dir)
+    if show_boxes:
+        box_dir = os.path.join(run_dir, 'pred_boxes')
+        utils.mkdir_if_missing(box_dir)
 
     # Feed images into model one by one. For each image visualize predictions
-    image_ids = dataset.image_ids
-
     print('VISUALIZING PREDICTIONS')
-    for image_id in tqdm(image_ids):
-        # Load image and ground truth data and resize for net
+    for image_id in tqdm(dataset.image_ids):
+        # Load image
         image, _, _, _ = modellib.load_image_gt(dataset, inference_config, image_id)
         if inference_config.IMAGE_CHANNEL_COUNT == 1:
             image = np.repeat(image, 3, axis=2)
 
-        # load info
+        # load predicted boxes
         r = np.load(os.path.join(pred_info_dir, 'image_{:06}.npy'.format(image_id)), allow_pickle=True).item()
 
-        # Visualize
-        scores = r['scores'] if show_scores else None
-        fig = plt.figure(figsize=(1.7067, 1.7067), dpi=300, frameon=False)
-        ax = plt.Axes(fig, [0.,0.,1.,1.])
-        fig.add_axes(ax)
-        visualize.display_instances(image, ax, r['rois'], r['class_ids'], ['bg', 'obj'], colors=['r']*len(r['class_ids']),
-                                    scores=scores, show_bbox=show_bbox, show_class=show_class)
-        file_name = os.path.join(vis_dir, 'vis_{:06d}'.format(image_id))
-        fig.savefig(file_name, transparent=True, dpi=300)
-        plt.close()
+        if show_dists:
+            y_centers = np.mean(r['rois'][:,::2], axis=1, dtype=np.int)
+            x_centers = np.mean(r['rois'][:,1::2], axis=1, dtype=np.int)
+            dist = np.zeros_like(image[:,:,0], dtype=np.bool)
+            dist[y_centers, x_centers] = True
+            dist = skm.binary_dilation(dist, selem=np.ones((8,8)))
+            fig = plt.figure(figsize=(1.7067, 1.7067), dpi=300, frameon=False)
+            ax = plt.Axes(fig, [0.,0.,1.,1.])
+            fig.add_axes(ax)
+            ax.imshow(dist, cmap=plt.cm.gray)
+            file_name = os.path.join(dist_dir, 'dist_{:06d}'.format(image_id))
+            fig.savefig(file_name, transparent=True, dpi=300)
+            plt.close()
 
-def visualize_gts(run_dir, dataset, inference_config, show_bbox=True, show_scores=False, show_class=True):
+        if show_boxes:
+            # Visualize boxes
+            scores = r['scores'] if show_scores else None
+            fig = plt.figure(figsize=(1.7067, 1.7067), dpi=300, frameon=False)
+            ax = plt.Axes(fig, [0.,0.,1.,1.])
+            fig.add_axes(ax)
+            visualize.display_instances(image, ax, r['rois'], r['class_ids'], ['bg', 'obj'], 
+                                        colors=['b']*len(r['class_ids']), scores=scores, show_class=show_class)
+            file_name = os.path.join(box_dir, 'boxes_{:06d}'.format(image_id))
+            fig.savefig(file_name, transparent=True, dpi=300)
+            plt.close()
+
+def visualize_gts(run_dir, dataset, inference_config, show_dists=True, 
+                  show_boxes=True, show_scores=False, show_class=True):
     """Visualizes gts."""
-    # Create subdirectory for gt visualizations
-    vis_dir = os.path.join(run_dir, 'gt_vis')
-    utils.mkdir_if_missing(vis_dir)
-
-    # Feed images one by one
-    image_ids = dataset.image_ids
+    # Create subdirectories for gt visualizations
+    if show_dists:
+        dist_dir = os.path.join(run_dir, 'gt_dists')
+        utils.mkdir_if_missing(dist_dir)
+    if show_boxes:
+        box_dir = os.path.join(run_dir, 'gt_boxes')
+        utils.mkdir_if_missing(box_dir)
 
     print('VISUALIZING GROUND TRUTHS')
-    for image_id in tqdm(image_ids):
+    for image_id in tqdm(dataset.image_ids):
         # Load image and ground truth data and resize for net
         image, _, gt_class_id, gt_bbox = modellib.load_image_gt(dataset, inference_config, image_id)
 
         if inference_config.IMAGE_CHANNEL_COUNT == 1:
             image = np.repeat(image, 3, axis=2)
 
-        # Visualize
-        scores = np.ones(gt_class_id.size) if show_scores else None
-        fig = plt.figure(figsize=(1.7067, 1.7067), dpi=300, frameon=False)
-        ax = plt.Axes(fig, [0.,0.,1.,1.])
-        fig.add_axes(ax)
-        visualize.display_instances(image, ax, gt_bbox, gt_class_id, ['bg', 'obj'], colors=['g']*len(gt_class_id),
-                                    scores=scores, show_bbox=show_bbox, show_class=show_class)
-        file_name = os.path.join(vis_dir, 'gt_vis_{:06d}'.format(image_id))
-        height, width = image.shape[:2]
-        fig.savefig(file_name, transparent=True, dpi=300)
-        plt.close()
+        if show_dists:
+            y_centers = np.mean(gt_bbox[:,::2], axis=1, dtype=np.int)
+            x_centers = np.mean(gt_bbox[:,1::2], axis=1, dtype=np.int)
+            dist = np.zeros_like(image[:,:,0], dtype=np.bool)
+            dist[y_centers, x_centers] = True
+            dist = skm.binary_dilation(dist, selem=np.ones((8,8)))
+
+            fig = plt.figure(figsize=(1.7067, 1.7067), dpi=300, frameon=False)
+            ax = plt.Axes(fig, [0.,0.,1.,1.])
+            fig.add_axes(ax)
+            ax.imshow(dist, cmap=plt.cm.gray)
+            file_name = os.path.join(dist_dir, 'dist_{:06d}'.format(image_id))
+            fig.savefig(file_name, transparent=True, dpi=300)
+            plt.close()
+
+        if show_boxes:
+            # Visualize boxes
+            scores = np.ones(gt_class_id.size) if show_scores else None
+            fig = plt.figure(figsize=(1.7067, 1.7067), dpi=300, frameon=False)
+            ax = plt.Axes(fig, [0.,0.,1.,1.])
+            fig.add_axes(ax)
+            visualize.display_instances(image, ax, gt_bbox, gt_class_id, ['bg', 'obj'], 
+                                        colors=['g']*len(gt_class_id), scores=scores, show_class=show_class)
+            file_name = os.path.join(box_dir, 'boxes_{:06d}'.format(image_id))
+            fig.savefig(file_name, transparent=True, dpi=300)
+            plt.close()     
 
 
-def visualize_differences(run_dir, dataset, inference_config, pred_info_dir, show_bbox=True, show_scores=True, show_class=True):
-    """Visualizes predictions."""
-    # Create subdirectory for prediction visualizations
-    vis_dir = os.path.join(run_dir, 'diff_vis')
-    utils.mkdir_if_missing(vis_dir)
+def visualize_differences(run_dir, dataset, inference_config, pred_info_dir, show_dists=True,
+                          show_boxes=True, show_scores=True, show_class=True):
+    """Visualizes differences in predictions and ground truth."""
+    # Create subdirectories for visualizations
+    if show_dists:
+        dist_dir = os.path.join(run_dir, 'diff_dists')
+        utils.mkdir_if_missing(dist_dir)
+    if show_boxes:
+        box_dir = os.path.join(run_dir, 'diff_boxes')
+        utils.mkdir_if_missing(box_dir)
 
-    # Feed images into model one by one. For each image visualize predictions
-    image_ids = dataset.image_ids
-
-    print('VISUALIZING PREDICTIONS')
-    for image_id in tqdm(image_ids):
+    print('VISUALIZING DIFFERENCES')
+    for image_id in tqdm(dataset.image_ids):
+        
         # Load image and ground truth data and resize for net
         image, _, gt_class_id, gt_bbox = modellib.load_image_gt(dataset, inference_config, image_id)
         if inference_config.IMAGE_CHANNEL_COUNT == 1:
@@ -270,17 +331,37 @@ def visualize_differences(run_dir, dataset, inference_config, pred_info_dir, sho
         # load mask and info
         r = np.load(os.path.join(pred_info_dir, 'image_{:06}.npy'.format(image_id)), allow_pickle=True).item()
 
-        # Visualize
-        fig = plt.figure(figsize=(1.7067, 1.7067), dpi=300, frameon=False)
-        ax = plt.Axes(fig, [0.,0.,1.,1.])
-        fig.add_axes(ax)
-        visualize.display_differences(image, ax, gt_bbox, gt_class_id, r['rois'], 
-                                      r['class_ids'], r['scores'], ['bg', 'obj'], 
-                                      show_bbox=show_bbox)
+        if show_dists:
+            gt_y_centers = np.mean(gt_bbox[:,::2], axis=1, dtype=np.int)
+            gt_x_centers = np.mean(gt_bbox[:,1::2], axis=1, dtype=np.int)
+            gt_dist = np.zeros_like(image[:,:,0], dtype=np.bool)
+            gt_dist[gt_y_centers, gt_x_centers] = True
+            gt_dist = skm.binary_dilation(gt_dist, selem=np.ones((8,8))).astype(np.uint8)
 
-        file_name = os.path.join(vis_dir, 'diff_vis_{:06d}'.format(image_id))
-        fig.savefig(file_name, transparent=True, dpi=300)
-        plt.close()
+            pred_y_centers = np.mean(r['rois'][:,::2], axis=1, dtype=np.int)
+            pred_x_centers = np.mean(r['rois'][:,1::2], axis=1, dtype=np.int)
+            pred_dist = np.zeros_like(image[:,:,0], dtype=np.bool)
+            pred_dist[pred_y_centers, pred_x_centers] = True
+            pred_dist = 2 * (skm.binary_dilation(pred_dist, selem=np.ones((8,8))).astype(np.uint8))
+ 
+            fig = plt.figure(figsize=(1.7067, 1.7067), dpi=300, frameon=False)
+            ax = plt.Axes(fig, [0.,0.,1.,1.])
+            fig.add_axes(ax)
+            ax.imshow(gt_dist+pred_dist)
+            file_name = os.path.join(dist_dir, 'dist_{:06d}'.format(image_id))
+            fig.savefig(file_name, transparent=True, dpi=300)
+            plt.close()
+
+        if show_boxes:
+            fig = plt.figure(figsize=(1.7067, 1.7067), dpi=300, frameon=False)
+            ax = plt.Axes(fig, [0.,0.,1.,1.])
+            fig.add_axes(ax)
+            visualize.display_differences(image, ax, gt_bbox, gt_class_id, r['rois'], 
+                                        r['class_ids'], r['scores'], ['bg', 'obj'])
+
+            file_name = os.path.join(box_dir, 'diff_vis_{:06d}'.format(image_id))
+            fig.savefig(file_name, transparent=True, dpi=300)
+            plt.close() 
 
 if __name__ == "__main__":
 

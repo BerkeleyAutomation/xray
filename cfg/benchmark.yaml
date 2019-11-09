@@ -11,27 +11,34 @@ model:
     backbone: resnet35
     post_nms_rois_inference: 2000
     rpn_nms_threshold: 1.0
-    detection_nms_threshold: 0.35
+    detection_nms_threshold: 0.75
 
 dataset:
   path: /nfs/diskstation/projects/mech_search/prob_pose/datasets/dataset_test_11_1/images
   images: color_ims
   dists: dist_ims
   indices: test_indices.npy
+  max_inds: 0 # 0 if no limit, otherwise the maximum number of images to test on (for debugging)
 
 # Visualization settings
 vis:
   # Prediction vis settings
-  predictions: 1
-  show_bbox_pred: 1
-  show_scores_pred: 0
-  show_class_pred: 0
+  pred:
+    boxes: 1
+    scores: 0
+    classes: 0
+    dists: 0
 
   # GT vis settings
-  ground_truth: 1
-  show_bbox_gt: 1
-  show_scores_gt: 0
-  show_class_gt: 0
+  gt:
+    boxes: 0
+    scores: 0
+    classes: 0
+    dists: 0
 
   # Visualize GT and predictions together
-  diffs: 0
+  diffs:
+    boxes: 0
+    scores: 0
+    classes: 0
+    dists: 1
