@@ -15,11 +15,18 @@ from autolab_core import YamlConfig
 import utils
 import fcn_dataset
 
+try:
+    from apex import amp
+    APEX_AVAILABLE = True
+except ModuleNotFoundError:
+    APEX_AVAILABLE = False
+
 class Trainer(object):
 
     def __init__(self, cuda, model, optimizer,
                  train_loader, val_loader, out, max_iter,
-                 reduction='mean', interval_validate=None):
+                 reduction='mean', interval_validate=None,
+                 use_amp=False):
         self.cuda = cuda
 
         self.model = model
@@ -30,6 +37,7 @@ class Trainer(object):
 
         self.timestamp_start = datetime.datetime.now()
         self.reduction = reduction
+        self.use_amp = use_amp
 
         if interval_validate is None:
             self.interval_validate = len(self.train_loader)
@@ -125,6 +133,7 @@ class Trainer(object):
             'arch': self.model.__class__.__name__,
             'optim_state_dict': self.optim.state_dict(),
             'model_state_dict': self.model.state_dict(),
+            'amp': amp.state_dict(),
             'best_mean_iou': self.best_mean_iou,
         }, osp.join(self.out, 'checkpoint.pth.tar'))
         if is_best:
@@ -162,7 +171,12 @@ class Trainer(object):
             loss_data = loss.data.item()
             if np.isnan(loss_data):
                 raise ValueError('loss is nan while training')
-            loss.backward()
+
+            if self.use_amp:
+                with amp.scale_loss(loss, self.optim) as scaled_loss:
+                    scaled_loss.backward()
+            else:
+                loss.backward()
             self.optim.step()
             loss_data /= len(data)
 
@@ -247,6 +261,15 @@ if __name__ == "__main__":
     if conf_args.resume:
         optim.load_state_dict(checkpoint['optim_state_dict'])
 
+    # If using mixed precision training, initialize here
+    if APEX_AVAILABLE:
+        if conf_args.resume:
+            amp.load_state_dict(checkpoint['amp'])
+        model, optim = amp.initialize(
+            model, optim, opt_level="O3", 
+            keep_batchnorm_fp32=True, loss_scale="dynamic"
+        )
+
     trainer = Trainer(
         cuda=cuda,
         model=model,
@@ -255,7 +278,7 @@ if __name__ == "__main__":
         val_loader=val_loader,
         out=out,
         max_iter=config['model']['max_iteration'],
-        interval_validate=4000,
+        use_amp=APEX_AVAILABLE
     )
     trainer.epoch = start_epoch
     trainer.iteration = start_iteration
