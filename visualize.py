@@ -93,7 +93,8 @@ def display_instances(image, ax, boxes, class_ids,
 
 def display_differences(image, ax, gt_box, gt_class_id,
                         pred_box, pred_class_id, pred_score,
-                        class_names, iou_threshold=0.5, score_threshold=0.5):
+                        class_names, show_scores=True,
+                        iou_threshold=0.5, score_threshold=0.5):
     """Display ground truth and prediction instances on the same image."""
     # Match predictions to ground truth
     gt_match, pred_match, overlaps = utils.compute_matches(
@@ -110,11 +111,14 @@ def display_differences(image, ax, gt_box, gt_class_id,
     boxes = np.concatenate([gt_box, pred_box])
 
     # Captions per instance show score/IoU
-    captions = ["" for m in gt_match] + ["{:.2f} / {:.2f}".format(
-        pred_score[i],
-        (overlaps[i, int(pred_match[i])]
-            if pred_match[i] > -1 else overlaps[i].max()))
-            for i in range(len(pred_match))]
+    if show_scores:
+        captions = ["" for m in gt_match] + ["{:.2f} / {:.2f}".format(
+            pred_score[i],
+            (overlaps[i, int(pred_match[i])]
+                if pred_match[i] > -1 else overlaps[i].max()))
+                for i in range(len(pred_match))]
+    else:
+        captions = None
     
     # Set title if not provided
     title = "Ground Truth and Detections\n GT=green, pred=red, captions: score/IoU"
@@ -124,7 +128,7 @@ def display_differences(image, ax, gt_box, gt_class_id,
     display_instances(
         image, ax,
         boxes, class_ids,
-        class_names, scores,
+        class_names, show_class=False,
         colors=colors, captions=captions)
 
 

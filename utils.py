@@ -6,18 +6,16 @@ Copyright (c) 2017 Matterport, Inc.
 Licensed under the MIT License (see LICENSE for details)
 Written by Waleed Abdulla
 """
-
-import sys
+from __future__ import division
 import os
-import logging
 import math
 import random
 import numpy as np
 import tensorflow as tf
-import scipy
-import skimage.color
-import skimage.io
-import skimage.transform
+import scipy.ndimage
+import skimage
+import copy
+import six
 import urllib.request
 import shutil
 import warnings
@@ -666,3 +664,240 @@ def resize(image, output_shape, order=1, mode='constant', cval=0, clip=True,
             image, output_shape,
             order=order, mode=mode, cval=cval, clip=clip,
             preserve_range=preserve_range)
+
+
+# -----------------------------------------------------------------------------
+# Color Util
+# -----------------------------------------------------------------------------
+
+def bitget(byteval, idx):
+    return ((byteval & (1 << idx)) != 0)
+
+def label_colormap(N=256):
+    cmap = np.zeros((N, 3))
+    for i in six.moves.range(0, N):
+        id = i
+        r, g, b = 0, 0, 0
+        for j in six.moves.range(0, 8):
+            r = np.bitwise_or(r, (bitget(id, 0) << 7 - j))
+            g = np.bitwise_or(g, (bitget(id, 1) << 7 - j))
+            b = np.bitwise_or(b, (bitget(id, 2) << 7 - j))
+            id = (id >> 3)
+        cmap[i, 0] = r
+        cmap[i, 1] = g
+        cmap[i, 2] = b
+    cmap = cmap.astype(np.float32) / 255
+    return cmap
+
+# -----------------------------------------------------------------------------
+# Evaluation
+# -----------------------------------------------------------------------------
+def label_accuracy_score(label_trues, label_preds, threshold=0.5):
+    """Returns accuracy score evaluation result.
+
+      - mean accuracy
+      - mean IoU
+      - balanced accuracy
+    """
+    lp = np.array(label_preds) >= threshold
+    lt = np.array(label_trues) > 0
+    
+    true_pos = np.sum(np.logical_and(lt, lp))
+    true_neg = np.sum(np.logical_and(~lt, ~lp))
+    num_pos = np.sum(lt)
+    
+    acc = (true_pos + true_neg) / lt.size
+    bal_acc = 0.5 * ((true_pos / num_pos) + (true_neg / (lt.size - num_pos)))
+    iou = true_pos / np.sum(np.logical_or(lt, lp))
+    
+    return acc, bal_acc, iou
+
+
+# -----------------------------------------------------------------------------
+# Visualization
+# -----------------------------------------------------------------------------
+def centerize(src, dst_shape, margin_color=None):
+    """Centerize image for specified image size
+
+    @param src: image to centerize
+    @param dst_shape: image shape (height, width) or (height, width, channel)
+    """
+    if src.shape[:2] == dst_shape[:2]:
+        return src
+    centerized = np.zeros(dst_shape, dtype=src.dtype)
+    if margin_color:
+        centerized[:, :] = margin_color
+    pad_vertical, pad_horizontal = 0, 0
+    h, w = src.shape[:2]
+    dst_h, dst_w = dst_shape[:2]
+    if h < dst_h:
+        pad_vertical = (dst_h - h) // 2
+    if w < dst_w:
+        pad_horizontal = (dst_w - w) // 2
+    centerized[pad_vertical:pad_vertical + h,
+               pad_horizontal:pad_horizontal + w] = src
+    return centerized
+
+
+def _tile_images(imgs, tile_shape, concatenated_image):
+    """Concatenate images whose sizes are same.
+
+    @param imgs: image list which should be concatenated
+    @param tile_shape: shape for which images should be concatenated
+    @param concatenated_image: returned image.
+        if it is None, new image will be created.
+    """
+    y_num, x_num = tile_shape
+    one_width = imgs[0].shape[1]
+    one_height = imgs[0].shape[0]
+    if concatenated_image is None:
+        if len(imgs[0].shape) == 3:
+            n_channels = imgs[0].shape[2]
+            assert all(im.shape[2] == n_channels for im in imgs)
+            concatenated_image = np.zeros(
+                (one_height * y_num, one_width * x_num, n_channels),
+                dtype=np.uint8,
+            )
+        else:
+            concatenated_image = np.zeros(
+                (one_height * y_num, one_width * x_num), dtype=np.uint8)
+    for y in six.moves.range(y_num):
+        for x in six.moves.range(x_num):
+            i = x + y * x_num
+            if i >= len(imgs):
+                pass
+            else:
+                concatenated_image[y * one_height:(y + 1) * one_height,
+                                   x * one_width:(x + 1) * one_width] = imgs[i]
+    return concatenated_image
+
+
+def get_tile_image(imgs, tile_shape=None, result_img=None, margin_color=None):
+    """Concatenate images whose sizes are different.
+
+    @param imgs: image list which should be concatenated
+    @param tile_shape: shape for which images should be concatenated
+    @param result_img: numpy array to put result image
+    """
+    def resize(*args, **kwargs):
+        # anti_aliasing arg cannot be passed to skimage<0.14
+        # use LooseVersion to allow 0.14dev.
+        if LooseVersion(skimage.__version__) < LooseVersion('0.14'):
+            kwargs.pop('anti_aliasing', None)
+        return skimage.transform.resize(*args, **kwargs)
+
+    def get_tile_shape(img_num):
+        x_num = 0
+        y_num = int(math.sqrt(img_num))
+        while x_num * y_num < img_num:
+            x_num += 1
+        return y_num, x_num
+
+    if tile_shape is None:
+        tile_shape = get_tile_shape(len(imgs))
+
+    # get max tile size to which each image should be resized
+    max_height, max_width = np.inf, np.inf
+    for img in imgs:
+        max_height = min([max_height, img.shape[0]])
+        max_width = min([max_width, img.shape[1]])
+
+    # resize and concatenate images
+    for i, img in enumerate(imgs):
+        h, w = img.shape[:2]
+        dtype = img.dtype
+        h_scale, w_scale = max_height / h, max_width / w
+        scale = min([h_scale, w_scale])
+        h, w = int(scale * h), int(scale * w)
+        img = resize(
+            image=img,
+            output_shape=(h, w),
+            mode='reflect',
+            preserve_range=True,
+            anti_aliasing=True,
+        ).astype(dtype)
+        if len(img.shape) == 3:
+            img = centerize(img, (max_height, max_width, 3), margin_color)
+        else:
+            img = centerize(img, (max_height, max_width), margin_color)
+        imgs[i] = img
+    return _tile_images(imgs, tile_shape, result_img)
+
+
+def label2rgb(lbl, img=None, alpha=0.5, thresh_suppress=0):
+
+    cmap = label_colormap(2)
+    cmap = (cmap * 255).astype(np.uint8)
+    lbl_viz = cmap[(lbl >= 0.5).astype(np.uint8)]
+
+    if img is not None:
+        img_gray = skimage.color.rgb2gray(img)
+        img_gray = skimage.color.gray2rgb(img_gray)
+        img_gray *= 255
+        lbl_viz = alpha * lbl_viz + (1 - alpha) * img_gray
+        lbl_viz = lbl_viz.astype(np.uint8)
+
+    return lbl_viz
+
+
+def visualize_segmentation(**kwargs):
+    """Visualize segmentation.
+
+    Parameters
+    ----------
+    img: ndarray
+        Input image to predict label.
+    lbl_true: ndarray
+        Ground truth of the label.
+    lbl_pred: ndarray
+        Label predicted.
+    n_class: int
+        Number of classes.
+    label_names: dict or list
+        Names of each label value.
+        Key or index is label_value and value is its name.
+
+    Returns
+    -------
+    img_array: ndarray
+        Visualized image.
+    """
+    img = kwargs.pop('img', None)
+    lbl_true = kwargs.pop('lbl_true', None)
+    lbl_pred = kwargs.pop('lbl_pred', None)
+    n_class = kwargs.pop('n_class', None)
+    label_names = kwargs.pop('label_names', None)
+    if kwargs:
+        raise RuntimeError(
+            'Unexpected keys in kwargs: {}'.format(kwargs.keys()))
+
+    if lbl_true is None and lbl_pred is None:
+        raise ValueError('lbl_true or lbl_pred must be not None.')
+
+    lbl_true = copy.deepcopy(lbl_true)
+    lbl_pred = copy.deepcopy(lbl_pred)
+
+    vizs = []
+
+    if lbl_true is not None:
+        viz_trues = [
+            img,
+            label2rgb(lbl_true),
+            label2rgb(lbl_true, img),
+        ]
+        vizs.append(get_tile_image(viz_trues, (1, 3)))
+
+    if lbl_pred is not None:
+        viz_preds = [
+            img,
+            label2rgb(lbl_pred),
+            label2rgb(lbl_pred, img),
+        ]
+        vizs.append(get_tile_image(viz_preds, (1, 3)))
+
+    if len(vizs) == 1:
+        return vizs[0]
+    elif len(vizs) == 2:
+        return get_tile_image(vizs, (2, 1))
+    else:
+        raise RuntimeError

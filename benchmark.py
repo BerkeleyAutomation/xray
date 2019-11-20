@@ -357,7 +357,8 @@ def visualize_differences(run_dir, dataset, inference_config, pred_info_dir, sho
             ax = plt.Axes(fig, [0.,0.,1.,1.])
             fig.add_axes(ax)
             visualize.display_differences(image, ax, gt_bbox, gt_class_id, r['rois'], 
-                                        r['class_ids'], r['scores'], ['bg', 'obj'])
+                                          r['class_ids'], r['scores'], ['bg', 'obj'], 
+                                          show_scores=False)
 
             file_name = os.path.join(box_dir, 'diff_vis_{:06d}'.format(image_id))
             fig.savefig(file_name, transparent=True, dpi=300)

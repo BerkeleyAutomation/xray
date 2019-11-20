@@ -1,4 +1,4 @@
-output_dir: /nfs/diskstation/projects/mech_search/prob_pose/benchmark_results
+output_dir: /nfs/diskstation/projects/mech_search/prob_pose/benchmark_results_NMS35
 save_conf_name: config.yaml
 
 model:
@@ -11,7 +11,7 @@ model:
     backbone: resnet35
     post_nms_rois_inference: 2000
     rpn_nms_threshold: 1.0
-    detection_nms_threshold: 0.75
+    detection_nms_threshold: 0.35
 
 dataset:
   path: /nfs/diskstation/projects/mech_search/prob_pose/datasets/dataset_test_11_1/images
@@ -24,7 +24,7 @@ dataset:
 vis:
   # Prediction vis settings
   pred:
-    boxes: 1
+    boxes: 0
     scores: 0
     classes: 0
     dists: 0
@@ -41,4 +41,4 @@ vis:
     boxes: 0
     scores: 0
     classes: 0
-    dists: 1
+    dists: 0
