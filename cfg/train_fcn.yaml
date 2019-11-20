@@ -1,9 +1,9 @@
 model:
   path: /nfs/diskstation/projects/mech_search/prob_pose/models/
-  max_iteration: 100000       # number of epochs to train for
+  max_iteration: 10000       # number of epochs to train for
   gpu: 0
-  batch_size: 10
-  lr: 1e-5
+  batch_size: 5
+  lr: 1e-6
   momentum: 0.99
   weight_decay: 0.0005
 
@@ -13,4 +13,4 @@ dataset:
 # name of the config file to save (within the dataset folder)
 # note that this will be overwritten between multiple runs so
 # you should name this uniquely for each run.
-save_conf_name: config_nms_test.yaml
+save_conf_name: fcn_11_1_lr1e-6.yaml

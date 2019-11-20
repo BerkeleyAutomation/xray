@@ -205,7 +205,7 @@ if __name__ == "__main__":
     
     out = osp.join(config['model']['path'], 'logs', now.strftime('%Y%m%d_%H%M%S.%f'))
     os.makedirs(out)
-    config.save(os.path.join(config['model']['path'], config['save_conf_name']))
+    config.save(os.path.join(out, config['save_conf_name']))
 
     os.environ['CUDA_VISIBLE_DEVICES'] = str(config['model']['gpu'])
     cuda = torch.cuda.is_available()
