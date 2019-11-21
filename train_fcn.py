@@ -217,7 +217,7 @@ if __name__ == "__main__":
 
     now = datetime.datetime.now()
     
-    out = osp.join(config['model']['path'], 'logs', now.strftime('%Y%m%d_%H%M%S.%f'))
+    out = osp.join(config['model']['path'], config['model']['name'] + now.strftime('%Y%m%d_%H%M%S.%f'))
     os.makedirs(out)
     config.save(os.path.join(out, config['save_conf_name']))
 

@@ -1,5 +1,6 @@
 model:
-  path: /nfs/diskstation/projects/mech_search/prob_pose/models/
+  path: /nfs/diskstation/projects/mech_search/prob_pose/models/fcn
+  name: fcn_lr1e-8
   max_iteration: 100000       # number of epochs to train for
   gpu: 1
   batch_size: 5

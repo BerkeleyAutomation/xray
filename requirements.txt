@@ -1,0 +1,7 @@
+numpy
+torch
+tqdm
+scikit-image
+autolab_core
+apex
+tensorflow-gpu
