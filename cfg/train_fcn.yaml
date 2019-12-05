@@ -1,17 +1,18 @@
 model:
   path: /nfs/diskstation/projects/mech_search/prob_pose/models/fcn
-  name: fcn_lr1e-8
+  name: fcn_lr1e-4
   max_iteration: 100000       # number of epochs to train for
   gpu: 1
-  batch_size: 5
-  lr: 1e-8
+  batch_size: 24
+  lr: 1e-4
   momentum: 0.99
   weight_decay: 0.0005
 
 dataset:
-  path: /nfs/diskstation/projects/mech_search/prob_pose/datasets/dataset_test_11_7/images
+  path: /nfs/diskstation/projects/mech_search/prob_pose/datasets/dataset_test_11_21/images
+  soft_masks: 1
 
 # name of the config file to save (within the dataset folder)
 # note that this will be overwritten between multiple runs so
 # you should name this uniquely for each run.
-save_conf_name: fcn_11_7_lr1e-8.yaml
+save_conf_name: fcn_11_21_lr1e-4.yaml

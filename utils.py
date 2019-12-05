@@ -699,16 +699,20 @@ def label_accuracy_score(label_trues, label_preds, threshold=0.5):
       - mean IoU
       - balanced accuracy
     """
-    lp = np.array(label_preds) >= threshold
-    lt = np.array(label_trues) > 0
+    # lp = np.array(label_preds) >= threshold
+    # lt = np.array(label_trues) > 0
+    lp = np.array(label_preds)
+    lt = np.array(label_trues)
     
-    true_pos = np.sum(np.logical_and(lt, lp))
-    true_neg = np.sum(np.logical_and(~lt, ~lp))
-    num_pos = np.sum(lt)
+    # true_pos = np.sum(np.logical_and(lt, lp))
+    # true_neg = np.sum(np.logical_and(~lt, ~lp))
+    true_pos = np.sum(np.logical_and(np.abs(lp - lt) < 0.25, lt > 0))
+    true_neg = np.sum(np.logical_and(np.abs(lp - lt) < 0.25, lt == 0))
+    num_pos = np.sum(lt > 0)
     
     acc = (true_pos + true_neg) / lt.size
     bal_acc = 0.5 * ((true_pos / num_pos) + (true_neg / (lt.size - num_pos)))
-    iou = true_pos / np.sum(np.logical_or(lt, lp))
+    iou = true_pos / np.sum(np.logical_or(lt > 0, lp > 0))
     
     return acc, bal_acc, iou
 
@@ -828,7 +832,7 @@ def label2rgb(lbl, img=None, alpha=0.5, thresh_suppress=0):
 
     cmap = label_colormap(2)
     cmap = (cmap * 255).astype(np.uint8)
-    lbl_viz = cmap[(lbl >= 0.5).astype(np.uint8)]
+    lbl_viz = cmap[(lbl * 255.).astype(np.uint8)]
 
     if img is not None:
         img_gray = skimage.color.rgb2gray(img)
