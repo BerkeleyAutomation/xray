@@ -88,16 +88,18 @@ class Trainer(object):
                 score = self.model(data)
             score = score['out'].squeeze()
             
-            pos_weight = (target.nelement() - target.sum()) / target.sum()
-            x_ent_2D = torch.nn.BCEWithLogitsLoss(reduction=self.reduction, pos_weight=pos_weight)
-            loss = x_ent_2D(score, target)
+            # pos_weight = (target.nelement() - target.sum()) / target.sum()
+            # x_ent_2D = torch.nn.BCEWithLogitsLoss(reduction=self.reduction, pos_weight=pos_weight)
+            # loss = x_ent_2D(score, target)
+            loss = torch.nn.MSELoss()(score, target)
             loss_data = loss.data.item()
             if np.isnan(loss_data):
                 raise ValueError('loss is nan while validating')
-            val_loss += loss_data
+            val_loss += loss_data / len(data)
 
             imgs = data.data.cpu()
-            lbl_pred = torch.sigmoid(score).data.cpu().numpy()
+            # lbl_pred = torch.sigmoid(score).data.cpu().numpy()
+            lbl_pred = score.data.cpu().numpy()
             lbl_true = target.data.cpu()
             for img, lt, lp in zip(imgs, lbl_true, lbl_pred):
                 img, lt = self.val_loader.dataset.untransform(img, lt)
@@ -165,9 +167,10 @@ class Trainer(object):
             self.optim.zero_grad()
             score = self.model(data)['out'].squeeze()
 
-            pos_weight = (target.nelement() - target.sum()) / target.sum()
-            x_ent_2D = torch.nn.BCEWithLogitsLoss(reduction=self.reduction, pos_weight=pos_weight)
-            loss = x_ent_2D(score, target)
+            # pos_weight = (target.nelement() - target.sum()) / target.sum()
+            # x_ent_2D = torch.nn.BCEWithLogitsLoss(reduction=self.reduction, pos_weight=pos_weight)
+            # loss = x_ent_2D(score, target)
+            loss = torch.nn.MSELoss()(score, target)
             loss_data = loss.data.item()
             if np.isnan(loss_data):
                 raise ValueError('loss is nan while training')
@@ -180,7 +183,8 @@ class Trainer(object):
             self.optim.step()
             loss_data /= len(data)
 
-            lbl_pred = torch.sigmoid(score).data.cpu().numpy()
+            # lbl_pred = torch.sigmoid(score).data.cpu().numpy()
+            lbl_pred = score.data.cpu().numpy()
             lbl_true = target.data.cpu().numpy()
             metrics = utils.label_accuracy_score(lbl_true, lbl_pred)
 
