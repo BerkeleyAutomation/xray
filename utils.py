@@ -692,7 +692,7 @@ def label_colormap(N=256):
 # -----------------------------------------------------------------------------
 # Evaluation
 # -----------------------------------------------------------------------------
-def label_accuracy_score(label_trues, label_preds, pos_thresh=0.01, diff_thresh=0.25):
+def label_accuracy_score(label_trues, label_preds, pos_thresh=25.5, diff_thresh=51):
     """Returns accuracy score evaluation result.
 
       - mean accuracy
@@ -706,7 +706,6 @@ def label_accuracy_score(label_trues, label_preds, pos_thresh=0.01, diff_thresh=
     
     # true_pos = np.sum(np.logical_and(lt, lp))
     # true_neg = np.sum(np.logical_and(~lt, ~lp))
-    import pdb; pdb.set_trace()
     true_pos = np.sum(np.logical_and(np.abs(lp - lt) < diff_thresh, lt > pos_thresh))
     true_neg = np.sum(np.logical_and(np.abs(lp - lt) < diff_thresh, lt <= pos_thresh))
     num_pos = np.sum(lt > pos_thresh)

@@ -11,27 +11,8 @@ dataset:
   soft_masks: 1
   # path: /home/mjd3/pose/probabilistic-poses/datasets/dataset_test_11_21/images
   path: /nfs/diskstation/projects/mech_search/prob_pose/datasets/dataset_test_11_21/images
-  max_inds: 32 # 0 if no limit, otherwise the maximum number of images to test on (for debugging)
+  max_inds: 0 # 0 if no limit, otherwise the maximum number of images to test on (for debugging)
 
-# # Visualization settings
-# vis:
-#   # Prediction vis settings
-#   pred:
-#     boxes: 0
-#     scores: 0
-#     classes: 0
-#     dists: 0
-
-#   # GT vis settings
-#   gt:
-#     boxes: 0
-#     scores: 0
-#     classes: 0
-#     dists: 0
-
-#   # Visualize GT and predictions together
-#   diffs:
-#     boxes: 0
-#     scores: 0
-#     classes: 0
-#     dists: 0
+# Visualization settings
+vis: 1
+vis_interval: 10
