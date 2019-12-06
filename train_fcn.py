@@ -199,6 +199,7 @@ class Trainer(object):
             if self.iteration >= self.max_iter:
                 break
 
+    
     def train(self):
         max_epoch = int(math.ceil(1. * self.max_iter / len(self.train_loader)))
         for epoch in tqdm.trange(self.epoch, max_epoch,
@@ -232,7 +233,6 @@ if __name__ == "__main__":
     if cuda:
         torch.cuda.manual_seed(1337)
         torch.backends.cudnn.benchmark = True
-
 
     # 1. dataset
     root = config['dataset']['path']
