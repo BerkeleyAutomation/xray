@@ -42,17 +42,11 @@ class FCNDataset(data.Dataset):
         
         # load image
         img_file = data_file['img']
-        try:
-            img = imread(img_file)
-        except:
-            print(img_file)
-        
+        img = imread(img_file)
+    
         # load label
         lbl_file = data_file['lbl']
-        try:
-            lbl = imread(lbl_file)
-        except:
-            print(lbl_file)
+        lbl = imread(lbl_file)
         if not self._soft:
             lbl = skm.binary_dilation(lbl, selem=np.ones((11,11)))
         if self._transform:

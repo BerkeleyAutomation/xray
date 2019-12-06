@@ -832,7 +832,9 @@ def label2rgb(lbl, img=None, alpha=0.5, thresh_suppress=0):
 
     cmap = label_colormap(2)
     cmap = (cmap * 255).astype(np.uint8)
-    lbl_viz = cmap[(lbl * 255.).astype(np.uint8)]
+    
+    lbl_viz = cmap[(lbl > 0).astype(np.uint8)]
+    lbl_viz = (lbl_viz * lbl[...,None] / lbl.max()).astype(np.uint8)
 
     if img is not None:
         img_gray = skimage.color.rgb2gray(img)
