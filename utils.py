@@ -692,7 +692,7 @@ def label_colormap(N=256):
 # -----------------------------------------------------------------------------
 # Evaluation
 # -----------------------------------------------------------------------------
-def label_accuracy_score(label_trues, label_preds, threshold=0.5):
+def label_accuracy_score(label_trues, label_preds, pos_thresh=0.01, diff_thresh=0.25):
     """Returns accuracy score evaluation result.
 
       - mean accuracy
@@ -706,13 +706,14 @@ def label_accuracy_score(label_trues, label_preds, threshold=0.5):
     
     # true_pos = np.sum(np.logical_and(lt, lp))
     # true_neg = np.sum(np.logical_and(~lt, ~lp))
-    true_pos = np.sum(np.logical_and(np.abs(lp - lt) < 0.25, lt > 0))
-    true_neg = np.sum(np.logical_and(np.abs(lp - lt) < 0.25, lt == 0))
-    num_pos = np.sum(lt > 0)
+    import pdb; pdb.set_trace()
+    true_pos = np.sum(np.logical_and(np.abs(lp - lt) < diff_thresh, lt > pos_thresh))
+    true_neg = np.sum(np.logical_and(np.abs(lp - lt) < diff_thresh, lt <= pos_thresh))
+    num_pos = np.sum(lt > pos_thresh)
     
     acc = (true_pos + true_neg) / lt.size
     bal_acc = 0.5 * ((true_pos / num_pos) + (true_neg / (lt.size - num_pos)))
-    iou = true_pos / np.sum(np.logical_or(lt > 0, lp > 0))
+    iou = true_pos / np.sum(np.logical_or(lt > pos_thresh, lp > pos_thresh))
     
     return acc, bal_acc, iou
 
