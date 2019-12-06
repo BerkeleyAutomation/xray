@@ -42,7 +42,10 @@ class FCNDataset(data.Dataset):
         
         # load image
         img_file = data_file['img']
-        img = imread(img_file)
+        try:
+            img = imread(img_file)
+        except:
+            print(img_file)
         
         # load label
         lbl_file = data_file['lbl']
