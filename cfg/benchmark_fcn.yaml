@@ -5,7 +5,7 @@ model:
   # path: models/fcn_lr1e-420191205_172828.246862
   path: /nfs/diskstation/projects/mech_search/prob_pose/models/fcn_lr1e-420191205_172828.246862
   gpu: 1
-  batch_size: 8
+  batch_size: 4
 
 dataset:
   soft_masks: 1

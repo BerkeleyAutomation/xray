@@ -80,8 +80,7 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
         loss_data = loss.data.item()
         if np.isnan(loss_data):
             raise ValueError('loss is nan while benchmarking')
-        benchmark_loss += loss_data / len(data)
-
+        benchmark_loss += loss_data
         imgs = data.data.cpu()
         lbl_pred = score.data.cpu().numpy()
         lbl_true = target.data.cpu()
@@ -96,10 +95,10 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
             skimage.io.imsave(out_file, viz)
 
     metrics = utils.label_accuracy_score(label_trues, label_preds)
-    benchmark_loss /= len(data_loader)
+    benchmark_loss /= len(data_loader.dataset)
     
     t = PrettyTable(['#Img', 'Loss', 'Acc', 'Bal-Acc', 'IoU'])
-    t.add_row([len(data_loader)*len(imgs)] + [benchmark_loss] + list(metrics))
+    t.add_row([len(data_loader.dataset)] + [benchmark_loss] + list(metrics))
     print(t)
 
 
