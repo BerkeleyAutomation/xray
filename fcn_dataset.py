@@ -14,24 +14,21 @@ class FCNDataset(data.Dataset):
     
     mean_bgr = np.array([189.0995733, 189.0995733, 189.30626962])
 
-    def __init__(self, root, split='train', soft=False, transform=False, max_inds=0):
+    def __init__(self, root, split='train', imgs=['color_ims'], lbls='soft_dist_ims', transform=False, max_inds=0):
         self.root = root
         self.split = split
-        self._soft = soft
         self._transform = transform
+        self._soft = ('soft' in lbls)
 
         self.files = collections.defaultdict(list)
         inds = np.load(osp.join(root, '{}_indices.npy'.format(split)))
         if max_inds:
             inds = inds[:max_inds]
         for i in inds:
-            img_file = osp.join(root, 'color_ims', 'image_{:06d}.png'.format(i))
-            if self._soft:
-                lbl_file = osp.join(root, 'soft_dist_ims', 'image_{:06d}.png'.format(i))
-            else:
-                lbl_file = osp.join(root, 'dist_ims', 'image_{:06d}.png'.format(i))
+            img_files = [osp.join(root, img_folder, 'image_{:06d}.png'.format(i)) for img_folder in imgs]
+            lbl_file = osp.join(root, lbls, 'image_{:06d}.png'.format(i))
             self.files[split].append({
-                'img': img_file,
+                'img': img_files,
                 'lbl': lbl_file,
             })
         
@@ -43,8 +40,8 @@ class FCNDataset(data.Dataset):
         data_file = self.files[self.split][index]
         
         # load image
-        img_file = data_file['img']
-        img = imread(img_file)
+        img_files = data_file['img']
+        img = np.concatenate([imread(img_file) for img_file in img_files], axis=-1)
     
         # load label
         lbl_file = data_file['lbl']
@@ -57,9 +54,9 @@ class FCNDataset(data.Dataset):
             return img, lbl
 
     def transform(self, img, lbl):
-        img = img[:, :, ::-1]  # RGB -> BGR
+        img[:, :, :3] = img[:, :, :3][:, :, ::-1]  # RGB -> BGR
         img = img.astype(np.float64)
-        img -= self.mean_bgr
+        img[:, :, :3] -= self.mean_bgr
         img = img.transpose(2, 0, 1)
         img = torch.from_numpy(img).float()
         lbl = torch.from_numpy(lbl).float()
@@ -68,8 +65,8 @@ class FCNDataset(data.Dataset):
     def untransform(self, img, lbl):
         img = img.numpy()
         img = img.transpose(1, 2, 0)
-        img += self.mean_bgr
+        img[:, :, :3] += self.mean_bgr
         img = img.astype(np.uint8)
-        img = img[:, :, ::-1]
+        img[:, :, :3] = img[:, :, ::-1]
         lbl = lbl.numpy()
         return img, lbl

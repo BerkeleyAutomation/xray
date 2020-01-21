@@ -1,18 +1,20 @@
 model:
-  name: fcn_lr1e-4
+  name: multi_target_fcn_01_21_lr1e-4
   path: models/
+  type: siamese_fcn
   max_iteration: 100000       # number of epochs to train for
-  gpu: 2
+  gpu: 1
   batch_size: 24
   lr: 1e-4
   momentum: 0.99
   weight_decay: 0.0005
 
 dataset:
-  soft_masks: 1
-  path: /home/mjd3/pose/probabilistic-poses/datasets/dataset_test_11_21/images
+  path: /home/mjd3/pose/probabilistic-poses/datasets/multi_target_dataset/images
+  imgs: ['color_ims', 'target_ims']
+  lbls: 'soft_dist_ims'
 
 # name of the config file to save (within the dataset folder)
 # note that this will be overwritten between multiple runs so
 # you should name this uniquely for each run.
-save_conf_name: fcn_11_21_lr1e-4.yaml
+save_conf_name: multi_target_fcn_01_21_lr1e-4.yaml
