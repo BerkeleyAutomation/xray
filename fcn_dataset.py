@@ -67,6 +67,6 @@ class FCNDataset(data.Dataset):
         img = img.transpose(1, 2, 0)
         img[:, :, :3] += self.mean_bgr
         img = img.astype(np.uint8)
-        img[:, :, :3] = img[:, :, ::-1]
+        img[:, :, :3] = img[:, :, :3][:, :, ::-1]
         lbl = lbl.numpy()
         return img, lbl
