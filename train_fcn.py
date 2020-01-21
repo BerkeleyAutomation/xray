@@ -239,10 +239,12 @@ if __name__ == "__main__":
     root = config['dataset']['path']
     kwargs = {'num_workers': 4, 'pin_memory': True} if cuda else {}
     train_loader = torch.utils.data.DataLoader(
-        fcn_dataset.FCNDataset(root, split='train', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], transform=True),
+        fcn_dataset.FCNDataset(root, split='train', imgs=config['dataset']['imgs'], 
+                targs=config['dataset']['targs'], lbls=config['dataset']['lbls'], transform=True),
             batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
     val_loader = torch.utils.data.DataLoader(
-        fcn_dataset.FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], transform=True),
+        fcn_dataset.FCNDataset(root, split='test', imgs=config['dataset']['imgs'], 
+                targs=config['dataset']['targs'], lbls=config['dataset']['lbls'], transform=True),
             batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
 
     # 2. model
