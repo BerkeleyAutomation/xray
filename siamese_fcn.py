@@ -34,11 +34,11 @@ class SiameseFCN(nn.Module):
         input_shape = im.shape[-2:]
         
         # contract: features is a dict of tensors
-        features_im = self.backbone1(im)
-        features_targ = self.backbone2(targ)
+        features_im = self.backbone1(im)["out"]
+        features_targ = self.backbone2(targ)["out"].view(features_im.shape[0], features_im.shape[1], -1, features_im.shape[-1])
 
         result = OrderedDict()
-        x = torch.cat((features_im["out"], features_targ["out"]), dim=1)
+        x = torch.cat((features_im, features_targ), dim=2)
         x = self.classifier(x)
         x = F.interpolate(x, size=input_shape, mode='bilinear', align_corners=False)
         result["out"] = x
