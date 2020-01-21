@@ -107,7 +107,7 @@ class Trainer(object):
                 label_trues.append(lt)
                 label_preds.append(lp)
                 if len(visualizations) < 9:
-                    viz = utils.visualize_segmentation(lbl_pred=lp, lbl_true=lt, img=img)
+                    viz = utils.visualize_segmentation(lbl_pred=lp, lbl_true=lt, img=img[:, :, :3])
                     visualizations.append(viz)
         metrics = utils.label_accuracy_score(label_trues, label_preds)
 
