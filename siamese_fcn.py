@@ -30,15 +30,15 @@ class SiameseFCN(nn.Module):
         self.backbone2 = copy.deepcopy(backbone)
         self.classifier = classifier
 
-    def forward(self, x):
-        input_shape = x.shape[-2:]
+    def forward(self, im, targ):
+        input_shape = im.shape[-2:]
         
         # contract: features is a dict of tensors
-        features_im = self.backbone1(x[:, :3])
-        features_tar = self.backbone2(x[:, 3:])
+        features_im = self.backbone1(im)
+        features_targ = self.backbone2(targ)
 
         result = OrderedDict()
-        x = torch.cat((features_im["out"], features_tar["out"]), dim=1)
+        x = torch.cat((features_im["out"], features_targ["out"]), dim=1)
         x = self.classifier(x)
         x = F.interpolate(x, size=input_shape, mode='bilinear', align_corners=False)
         result["out"] = x

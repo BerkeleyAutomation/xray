@@ -78,36 +78,36 @@ class Trainer(object):
         val_loss = 0
         visualizations = []
         label_trues, label_preds = [], []
-        for batch_idx, (data, target) in tqdm.tqdm(
+        for batch_idx, (img, targ, lbl) in tqdm.tqdm(
                 enumerate(self.val_loader), total=len(self.val_loader),
                 desc='Valid iteration=%d' % self.iteration, ncols=80,
                 leave=False):
             if self.cuda:
-                data, target = data.cuda(), target.cuda()
-            data, target = Variable(data), Variable(target)
+                img, targ, lbl = img.cuda(), targ.cuda(), lbl.cuda()
+            img, targ, lbl = Variable(img), Variable(targ), Variable(lbl)
             with torch.no_grad():
-                score = self.model(data)
+                score = self.model(img, targ)
             score = score['out'].squeeze()
             
             # pos_weight = (target.nelement() - target.sum()) / target.sum()
             # x_ent_2D = torch.nn.BCEWithLogitsLoss(reduction=self.reduction, pos_weight=pos_weight)
             # loss = x_ent_2D(score, target)
-            loss = torch.nn.MSELoss()(score, target)
+            loss = torch.nn.MSELoss()(score, lbl)
             loss_data = loss.data.item()
             if np.isnan(loss_data):
                 raise ValueError('loss is nan while validating')
-            val_loss += loss_data / len(data)
+            val_loss += loss_data / len(img)
 
-            imgs = data.data.cpu()
+            imgs = img.data.cpu()
             # lbl_pred = torch.sigmoid(score).data.cpu().numpy()
             lbl_pred = score.data.cpu().numpy()
-            lbl_true = target.data.cpu()
-            for img, lt, lp in zip(imgs, lbl_true, lbl_pred):
-                img, lt = self.val_loader.dataset.untransform(img, lt)
+            lbl_true = lbl.data.cpu()
+            for im, lt, lp in zip(imgs, lbl_true, lbl_pred):
+                im, lt = self.val_loader.dataset.untransform(im, lt)
                 label_trues.append(lt)
                 label_preds.append(lp)
                 if len(visualizations) < 9:
-                    viz = utils.visualize_segmentation(lbl_pred=lp, lbl_true=lt, img=img[:, :, :3])
+                    viz = utils.visualize_segmentation(lbl_pred=lp, lbl_true=lt, img=im)
                     visualizations.append(viz)
         metrics = utils.label_accuracy_score(label_trues, label_preds)
 
@@ -149,7 +149,7 @@ class Trainer(object):
     def train_epoch(self):
         self.model.train()
 
-        for batch_idx, (data, target) in tqdm.tqdm(
+        for batch_idx, (img, targ, lbl) in tqdm.tqdm(
                 enumerate(self.train_loader), total=len(self.train_loader),
                 desc='Train epoch=%d' % self.epoch, ncols=80, leave=False):
             iteration = batch_idx + self.epoch * len(self.train_loader)
@@ -163,15 +163,15 @@ class Trainer(object):
             assert self.model.training
 
             if self.cuda:
-                data, target = data.cuda(), target.cuda()
-            data, target = Variable(data), Variable(target)
+                img, targ, lbl = img.cuda(), targ.cuda(), lbl.cuda()
+            img, targ, lbl = Variable(img), Variable(targ), Variable(lbl)
             self.optim.zero_grad()
-            score = self.model(data)['out'].squeeze()
+            score = self.model(img, targ)['out'].squeeze()
 
             # pos_weight = (target.nelement() - target.sum()) / target.sum()
             # x_ent_2D = torch.nn.BCEWithLogitsLoss(reduction=self.reduction, pos_weight=pos_weight)
             # loss = x_ent_2D(score, target)
-            loss = torch.nn.MSELoss()(score, target)
+            loss = torch.nn.MSELoss()(score, lbl)
             loss_data = loss.data.item()
             if np.isnan(loss_data):
                 raise ValueError('loss is nan while training')
@@ -186,7 +186,7 @@ class Trainer(object):
 
             # lbl_pred = torch.sigmoid(score).data.cpu().numpy()
             lbl_pred = score.data.cpu().numpy()
-            lbl_true = target.data.cpu().numpy()
+            lbl_true = lbl.data.cpu().numpy()
             metrics = utils.label_accuracy_score(lbl_true, lbl_pred)
 
             with open(osp.join(self.out, 'log.csv'), 'a') as f:
