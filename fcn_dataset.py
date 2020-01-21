@@ -69,7 +69,7 @@ class FCNDataset(data.Dataset):
         targ = torch.from_numpy(targ.astype(np.float64)).float()
         img = torch.from_numpy(img).float()
         lbl = torch.from_numpy(lbl).float()
-        return img, lbl
+        return img, targ, lbl
 
     def untransform(self, img, targ, lbl):
         img = img.numpy()
@@ -81,4 +81,4 @@ class FCNDataset(data.Dataset):
         targ = targ.astype(np.uint8)
         img = img[:, :, ::-1]
         lbl = lbl.numpy()
-        return img, lbl
+        return img, targ, lbl
