@@ -2,7 +2,6 @@ import collections
 import os.path as osp
 import numpy as np
 from skimage.io import imread
-import skimage.morphology as skm
 import torch
 from torch.utils import data
 
@@ -49,8 +48,6 @@ class FCNDataset(data.Dataset):
         # load label
         lbl_file = data_file['lbl']
         lbl = imread(lbl_file)
-        if not self._soft:
-            lbl = skm.binary_dilation(lbl, selem=np.ones((11,11)))
         if self._transform:
             img, lbl = self.transform(img, lbl)
         return img, lbl
@@ -74,13 +71,7 @@ class FCNDataset(data.Dataset):
         return img, lbl
 
 
-class FCNTargetDataset(data.Dataset):
-    class_names = np.array([
-            'background',
-            'obj',
-        ])
-    
-    mean_bgr = np.array([189.0995733, 189.0995733, 189.30626962])
+class FCNTargetDataset(FCNDataset):
 
     def __init__(self, root, split='train', 
                  imgs='color_ims', targs='target_ims', lbls='soft_dist_ims', 
@@ -105,48 +96,28 @@ class FCNTargetDataset(data.Dataset):
             })
         
 
-    def __len__(self):
-        return len(self.files[self.split])
-
     def __getitem__(self, index):
         data_file = self.files[self.split][index]
         
-        # load image
-        img_file = data_file['img']
-        img = imread(img_file)
+        # load image and label
+        img, lbl = super().__getitem__(index)
 
         # load target
         targ_file = data_file['targ']
         targ = imread(targ_file)
         
-        # load label
-        lbl_file = data_file['lbl']
-        lbl = imread(lbl_file)
-        if not self._soft:
-            lbl = skm.binary_dilation(lbl, selem=np.ones((11,11)))
         if self._transform:
-            img, targ, lbl = self.transform(img, targ, lbl)
+            img, targ, label = self.transform(img, targ, lbl)
         return img, targ, lbl
 
     def transform(self, img, targ, lbl):
-        img = img[:, :, ::-1]  # RGB -> BGR
-        img = img.astype(np.float64)
-        img -= self.mean_bgr
-        img = img.transpose(2, 0, 1)
+        img, lbl = super().transform(img, lbl)
         targ = targ.transpose(2, 0, 1)
         targ = torch.from_numpy(targ.astype(np.float64)).float()
-        img = torch.from_numpy(img).float()
-        lbl = torch.from_numpy(lbl).float()
         return img, targ, lbl
 
     def untransform(self, img, targ, lbl):
-        img = img.numpy()
+        img, lbl = super().untransform(img, lbl)
         targ = targ.numpy()
-        img = img.transpose(1, 2, 0)
-        targ = targ.transpose(1, 2, 0)
-        img += self.mean_bgr
-        img = img.astype(np.uint8)
-        targ = targ.astype(np.uint8)
-        img = img[:, :, ::-1]
-        lbl = lbl.numpy()
+        targ = targ.transpose(1, 2, 0).astype(np.uint8)
         return img, targ, lbl

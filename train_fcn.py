@@ -248,6 +248,7 @@ if __name__ == "__main__":
 
     if cuda:
         model = model.cuda()
+
     # 2. dataset
     root = config['dataset']['path']
     kwargs = {'num_workers': 4, 'pin_memory': True} if cuda else {}
@@ -255,7 +256,6 @@ if __name__ == "__main__":
     val_set = fcn_dataset.FCNTargetDataset(root, split='test', imgs=config['dataset']['imgs'], targs=config['dataset']['targs'],lbls=config['dataset']['lbls'], transform=True) if siamese else fcn_dataset.FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], transform=True)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
     val_loader = torch.utils.data.DataLoader(val_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
-
 
     # 3. optimizer
     optim = torch.optim.SGD(

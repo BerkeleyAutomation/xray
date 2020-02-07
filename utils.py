@@ -13,6 +13,7 @@ import random
 import numpy as np
 import tensorflow as tf
 import scipy.ndimage
+from matplotlib.pyplot import cm
 import skimage
 import copy
 import six
@@ -665,30 +666,6 @@ def resize(image, output_shape, order=1, mode='constant', cval=0, clip=True,
             order=order, mode=mode, cval=cval, clip=clip,
             preserve_range=preserve_range)
 
-
-# -----------------------------------------------------------------------------
-# Color Util
-# -----------------------------------------------------------------------------
-
-def bitget(byteval, idx):
-    return ((byteval & (1 << idx)) != 0)
-
-def label_colormap(N=256):
-    cmap = np.zeros((N, 3))
-    for i in six.moves.range(0, N):
-        id = i
-        r, g, b = 0, 0, 0
-        for j in six.moves.range(0, 8):
-            r = np.bitwise_or(r, (bitget(id, 0) << 7 - j))
-            g = np.bitwise_or(g, (bitget(id, 1) << 7 - j))
-            b = np.bitwise_or(b, (bitget(id, 2) << 7 - j))
-            id = (id >> 3)
-        cmap[i, 0] = r
-        cmap[i, 1] = g
-        cmap[i, 2] = b
-    cmap = cmap.astype(np.float32) / 255
-    return cmap
-
 # -----------------------------------------------------------------------------
 # Evaluation
 # -----------------------------------------------------------------------------
@@ -830,20 +807,17 @@ def get_tile_image(imgs, tile_shape=None, result_img=None, margin_color=None):
 
 def label2rgb(lbl, img=None, alpha=0.5, thresh_suppress=0):
 
-    cmap = label_colormap(2)
-    cmap = (cmap * 255).astype(np.uint8)
-    
-    lbl_viz = cmap[(lbl > 0).astype(np.uint8)]
-    lbl_viz = (lbl_viz * lbl[...,None] / lbl.max()).astype(np.uint8)
+    cmap = cm.jet
+    lbl_viz = cmap(lbl / lbl.max())[...,:-1]
+    lbl_viz = np.iinfo(np.uint8).max * lbl_viz
 
     if img is not None:
         img_gray = skimage.color.rgb2gray(img)
         img_gray = skimage.color.gray2rgb(img_gray)
         img_gray *= 255
         lbl_viz = alpha * lbl_viz + (1 - alpha) * img_gray
-        lbl_viz = lbl_viz.astype(np.uint8)
 
-    return lbl_viz
+    return lbl_viz.astype(np.uint8)
 
 
 def visualize_segmentation(**kwargs):

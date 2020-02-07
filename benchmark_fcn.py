@@ -65,40 +65,41 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
 
     benchmark_loss = 0
     label_trues, label_preds = [], []
-    for batch_idx, (data, target) in tqdm.tqdm(
+    for batch_idx, data in tqdm.tqdm(
             enumerate(data_loader), total=len(data_loader),
             desc='Benchmark Progress', ncols=80,
             leave=False):
         if cuda:
-            data, target = data.cuda(), target.cuda()
-        data, target = Variable(data), Variable(target)
+            data = tuple([d.cuda() for d in data])
+        data = tuple([Variable(d) for d in data])
+        lbl = data[-1]
         with torch.no_grad():
-            score = model(data)
+            score = model(*data[:-1])
         score = score['out'].squeeze()
         
-        loss = torch.nn.MSELoss()(score, target)
+        loss = torch.nn.MSELoss()(score, lbl)
         loss_data = loss.data.item()
         if np.isnan(loss_data):
             raise ValueError('loss is nan while benchmarking')
-        benchmark_loss += loss_data
-        imgs = data.data.cpu()
+        benchmark_loss += loss_data / len(score)
+        
+        data = tuple([d.data.cpu() for d in data])
         lbl_pred = score.data.cpu().numpy()
-        lbl_true = target.data.cpu()
-        for img, lt, lp in zip(imgs, lbl_true, lbl_pred):
-            img, lt = data_loader.dataset.untransform(img, lt)
-            label_trues.append(lt)
-            label_preds.append(lp)
+        for d in zip(*data, lbl_pred):
+            dd = data_loader.dataset.untransform(*d[:-1])
+            label_trues.append(dd[-1])
+            label_preds.append(d[-1])
         
         if config['vis'] and batch_idx % config['vis_interval'] == 0:
-            viz = utils.visualize_segmentation(lbl_pred=lp, lbl_true=lt, img=img)        
+            viz = utils.visualize_segmentation(lbl_pred=d[-1], lbl_true=dd[-1], img=dd[0])        
             out_file = osp.join(out, 'vis_sample_{:03d}.jpg'.format(int(batch_idx / config['vis_interval'])))
             skimage.io.imsave(out_file, viz)
 
     metrics = utils.label_accuracy_score(label_trues, label_preds)
-    benchmark_loss /= len(data_loader.dataset)
+    benchmark_loss /= len(data_loader)
     
     t = PrettyTable(['#Img', 'Loss', 'Acc', 'Bal-Acc', 'IoU'])
-    t.add_row([len(data_loader.dataset)] + [benchmark_loss] + list(metrics))
+    t.add_row([len(data_loader)] + [benchmark_loss] + list(metrics))
     print(t)
 
 
@@ -130,20 +131,19 @@ if __name__ == "__main__":
         torch.cuda.manual_seed(1337)
         torch.backends.cudnn.benchmark = True
 
-    # 1. dataset
-    root = config['dataset']['path']
-    kwargs = {'num_workers': 4, 'pin_memory': True} if cuda else {}
-    data_loader = torch.utils.data.DataLoader(
-        fcn_dataset.FCNDataset(root, split='test', soft=config['dataset']['soft_masks'], 
-                               transform=True, max_inds=config['dataset']['max_inds']),
-            batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
-
-    # 2. model
-    model = fcn_resnet50(num_classes=1)
-    checkpoint = torch.load(osp.join(config['model']['path'], 'checkpoint.pth.tar'))
+    # 1. model
+    siamese = (config['model']['type'] == 'siamese_fcn')
+    model = siamese_fcn() if siamese else fcn_resnet50(num_classes=1)
+    checkpoint = torch.load(osp.join(config['model']['path'], 'model_best.pth.tar'))
     model.load_state_dict(checkpoint['model_state_dict'])
     if cuda:
         model = model.cuda()
+
+    # 2. dataset
+    root = config['dataset']['path']
+    kwargs = {'num_workers': 4, 'pin_memory': True} if cuda else {}
+    test_set = fcn_dataset.FCNTargetDataset(root, split='test', imgs=config['dataset']['imgs'], targs=config['dataset']['targs'], lbls=config['dataset']['lbls'], transform=True) if siamese else fcn_dataset.FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], transform=True)
+    data_loader = torch.utils.data.DataLoader(test_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
 
     # If using mixed precision training, initialize here
     if APEX_AVAILABLE:
