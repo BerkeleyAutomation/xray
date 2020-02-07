@@ -17,7 +17,7 @@ def siamese_fcn(backbone='resnet50'):
     return_layers = {'layer4': 'out'}
     backbone = torchvision.models._utils.IntermediateLayerGetter(backbone, return_layers=return_layers)
 
-    inplanes = 4096
+    inplanes = 2048
     model = SiameseFCN(backbone, torchvision.models.segmentation.fcn.FCNHead(inplanes, 1))
     
     return model

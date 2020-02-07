@@ -78,15 +78,16 @@ class Trainer(object):
         val_loss = 0
         visualizations = []
         label_trues, label_preds = [], []
-        for batch_idx, (img, targ, lbl) in tqdm.tqdm(
+        for batch_idx, data in tqdm.tqdm(
                 enumerate(self.val_loader), total=len(self.val_loader),
                 desc='Valid iteration=%d' % self.iteration, ncols=80,
                 leave=False):
             if self.cuda:
-                img, targ, lbl = img.cuda(), targ.cuda(), lbl.cuda()
-            img, targ, lbl = Variable(img), Variable(targ), Variable(lbl)
+                data = tuple([d.cuda() for d in data])
+            data = tuple([Variable(d) for d in data])
+            lbl = data[-1]
             with torch.no_grad():
-                score = self.model(img, targ)
+                score = self.model(*data[:-1])
             score = score['out'].squeeze()
             
             # pos_weight = (target.nelement() - target.sum()) / target.sum()
@@ -96,18 +97,16 @@ class Trainer(object):
             loss_data = loss.data.item()
             if np.isnan(loss_data):
                 raise ValueError('loss is nan while validating')
-            val_loss += loss_data / len(img)
+            val_loss += loss_data / len(score)
 
-            imgs = img.data.cpu()
-            # lbl_pred = torch.sigmoid(score).data.cpu().numpy()
+            data = tuple([d.data.cpu() for d in data])
             lbl_pred = score.data.cpu().numpy()
-            lbl_true = lbl.data.cpu()
-            for im, lt, lp in zip(imgs, lbl_true, lbl_pred):
-                im, lt = self.val_loader.dataset.untransform(im, lt)
-                label_trues.append(lt)
-                label_preds.append(lp)
+            for d in zip(*data, lbl_pred):
+                dd = self.val_loader.dataset.untransform(*d[:-1])
+                label_trues.append(dd[-1])
+                label_preds.append(d[-1])
                 if len(visualizations) < 9:
-                    viz = utils.visualize_segmentation(lbl_pred=lp, lbl_true=lt, img=im)
+                    viz = utils.visualize_segmentation(lbl_pred=d[-1], lbl_true=dd[-1], img=dd[0])
                     visualizations.append(viz)
         metrics = utils.label_accuracy_score(label_trues, label_preds)
 
@@ -149,7 +148,7 @@ class Trainer(object):
     def train_epoch(self):
         self.model.train()
 
-        for batch_idx, (img, targ, lbl) in tqdm.tqdm(
+        for batch_idx, data in tqdm.tqdm(
                 enumerate(self.train_loader), total=len(self.train_loader),
                 desc='Train epoch=%d' % self.epoch, ncols=80, leave=False):
             iteration = batch_idx + self.epoch * len(self.train_loader)
@@ -163,10 +162,11 @@ class Trainer(object):
             assert self.model.training
 
             if self.cuda:
-                img, targ, lbl = img.cuda(), targ.cuda(), lbl.cuda()
-            img, targ, lbl = Variable(img), Variable(targ), Variable(lbl)
+                data = tuple([d.cuda() for d in data])
+            data = tuple([Variable(d) for d in data])
+            lbl = data[-1]
             self.optim.zero_grad()
-            score = self.model(img, targ)['out'].squeeze()
+            score = self.model(*data[:-1])['out'].squeeze()
 
             # pos_weight = (target.nelement() - target.sum()) / target.sum()
             # x_ent_2D = torch.nn.BCEWithLogitsLoss(reduction=self.reduction, pos_weight=pos_weight)
@@ -182,7 +182,7 @@ class Trainer(object):
             else:
                 loss.backward()
             self.optim.step()
-            loss_data /= len(data)
+            loss_data /= len(score)
 
             # lbl_pred = torch.sigmoid(score).data.cpu().numpy()
             lbl_pred = score.data.cpu().numpy()
@@ -235,23 +235,9 @@ if __name__ == "__main__":
         torch.cuda.manual_seed(1337)
         torch.backends.cudnn.benchmark = True
 
-    # 1. dataset
-    root = config['dataset']['path']
-    kwargs = {'num_workers': 4, 'pin_memory': True} if cuda else {}
-    train_loader = torch.utils.data.DataLoader(
-        fcn_dataset.FCNDataset(root, split='train', imgs=config['dataset']['imgs'], 
-                targs=config['dataset']['targs'], lbls=config['dataset']['lbls'], transform=True),
-            batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
-    val_loader = torch.utils.data.DataLoader(
-        fcn_dataset.FCNDataset(root, split='test', imgs=config['dataset']['imgs'], 
-                targs=config['dataset']['targs'], lbls=config['dataset']['lbls'], transform=True),
-            batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
-
-    # 2. model
-    if config['model']['type'] == 'fcn':
-        model = fcn_resnet50(num_classes=1)
-    else:
-        model = siamese_fcn()
+    # 1. model
+    siamese = (config['model']['type'] == 'siamese_fcn')
+    model = siamese_fcn() if siamese else fcn_resnet50(num_classes=1)
     start_epoch = 0
     start_iteration = 0
     if conf_args.resume:
@@ -262,6 +248,14 @@ if __name__ == "__main__":
 
     if cuda:
         model = model.cuda()
+    # 2. dataset
+    root = config['dataset']['path']
+    kwargs = {'num_workers': 4, 'pin_memory': True} if cuda else {}
+    train_set = fcn_dataset.FCNTargetDataset(root, split='train', imgs=config['dataset']['imgs'], targs=config['dataset']['targs'],lbls=config['dataset']['lbls'], transform=True) if siamese else fcn_dataset.FCNDataset(root, split='train', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], transform=True)
+    val_set = fcn_dataset.FCNTargetDataset(root, split='test', imgs=config['dataset']['imgs'], targs=config['dataset']['targs'],lbls=config['dataset']['lbls'], transform=True) if siamese else fcn_dataset.FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], transform=True)
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
+    val_loader = torch.utils.data.DataLoader(val_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
+
 
     # 3. optimizer
     optim = torch.optim.SGD(
