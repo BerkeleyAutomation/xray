@@ -99,15 +99,20 @@ class FCNTargetDataset(FCNDataset):
     def __getitem__(self, index):
         data_file = self.files[self.split][index]
         
-        # load image and label
-        img, lbl = super().__getitem__(index)
+        # load image
+        img_file = data_file['img']
+        img = imread(img_file)
 
+        # load label
+        lbl_file = data_file['lbl']
+        lbl = imread(lbl_file)
+        
         # load target
         targ_file = data_file['targ']
         targ = imread(targ_file)
         
         if self._transform:
-            img, targ, label = self.transform(img, targ, lbl)
+            img, targ, lbl = self.transform(img, targ, lbl)
         return img, targ, lbl
 
     def transform(self, img, targ, lbl):
