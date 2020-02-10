@@ -844,6 +844,7 @@ def visualize_segmentation(**kwargs):
         Visualized image.
     """
     img = kwargs.pop('img', None)
+    targ = kwargs.pop('targ', None)
     lbl_true = kwargs.pop('lbl_true', None)
     lbl_pred = kwargs.pop('lbl_pred', None)
     n_class = kwargs.pop('n_class', None)
@@ -860,21 +861,26 @@ def visualize_segmentation(**kwargs):
 
     vizs = []
 
+    if targ is not None:
+        viz_trues = [targ, img]
+        viz_preds = [targ, img]
+    else:
+        viz_trues = [img]
+        viz_preds = [img]
+
     if lbl_true is not None:
-        viz_trues = [
-            img,
+        viz_trues.extend([
             label2rgb(lbl_true),
             label2rgb(lbl_true, img),
-        ]
-        vizs.append(get_tile_image(viz_trues, (1, 3)))
+        ])
+        vizs.append(get_tile_image(viz_trues, (1, len(viz_trues))))
 
     if lbl_pred is not None:
-        viz_preds = [
-            img,
+        viz_preds.extend([
             label2rgb(lbl_pred),
             label2rgb(lbl_pred, img),
-        ]
-        vizs.append(get_tile_image(viz_preds, (1, 3)))
+        ])
+        vizs.append(get_tile_image(viz_preds, (1, len(viz_preds))))
 
     if len(vizs) == 1:
         return vizs[0]

@@ -1,16 +1,16 @@
-output_dir: /nfs/diskstation/projects/mech_search/prob_pose/benchmark_results/benchmark_2d/box_10
+output_dir: /nfs/diskstation/projects/mech_search/prob_pose/benchmark_results/benchmark_multi/benchmark_5_target
 save_conf_name: config.yaml
 
 model:
-  type: fcn
-  path: /nfs/diskstation/projects/mech_search/prob_pose/models/2d_models/box_10_fcn_01_27_lr1e-420200128_113502.898478/
+  type: siamese_fcn
+  path: /nfs/diskstation/projects/mech_search/prob_pose/models/5_target_r16_siamese_fcn_2_820200208_232932.399756/
   gpu: 1
   batch_size: 8
 
 dataset:
-  path: /nfs/diskstation/projects/mech_search/prob_pose/datasets/2d_datasets/single_goal_datasets/box_10_soft_dataset/images/
+  path: /nfs/diskstation/projects/mech_search/prob_pose/datasets/multi_goal_datasets/5_target_r16_dataset/images
   imgs: 'color_ims'
-  # targs: 'target_ims_test'
+  targs: 'target_ims'
   lbls: 'soft_dist_ims'
 
 # Visualization settings

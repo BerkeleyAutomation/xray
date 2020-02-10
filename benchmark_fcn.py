@@ -47,6 +47,7 @@ from prettytable import PrettyTable
 
 import utils
 import fcn_dataset
+from siamese_fcn import siamese_fcn
 
 try:
     from apex import amp
@@ -91,7 +92,10 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
             label_preds.append(d[-1])
         
         if config['vis'] and batch_idx % config['vis_interval'] == 0:
-            viz = utils.visualize_segmentation(lbl_pred=d[-1], lbl_true=dd[-1], img=dd[0])        
+            if len(dd) > 2:
+                viz = utils.visualize_segmentation(lbl_pred=d[-1], lbl_true=dd[-1], img=dd[0], targ=dd[1])     
+            else:
+                viz = utils.visualize_segmentation(lbl_pred=d[-1], lbl_true=dd[-1], img=dd[0])        
             out_file = osp.join(out, 'vis_sample_{:03d}.jpg'.format(int(batch_idx / config['vis_interval'])))
             skimage.io.imsave(out_file, viz)
 
