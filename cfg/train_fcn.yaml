@@ -1,8 +1,8 @@
 model:
-  name: box_5_r16_fine_fcn_2_7
+  name: 5_target_r16_siamese_fcn_2_8
   path: models/
-  type: fcn
-  max_iteration: 10000       # number of epochs to train for
+  type: siamese_fcn
+  max_iteration: 50000       # number of epochs to train for
   gpu: 0
   batch_size: 48
   lr: 1e-4
@@ -10,12 +10,12 @@ model:
   weight_decay: 0.0005
 
 dataset:
-  path: /home/mjd3/pose/probabilistic-poses/datasets/box_5_r16_fine_dataset/images
+  path: /home/mjd3/pose/probabilistic-poses/datasets/5_target_r16_dataset/images
   imgs: 'color_ims'
-  # targs: 'target_ims_test'
+  targs: 'target_ims'
   lbls: 'soft_dist_ims'
 
 # name of the config file to save (within the dataset folder)
 # note that this will be overwritten between multiple runs so
 # you should name this uniquely for each run.
-save_conf_name: box_5_r16_fine_fcn_2_7.yaml
+save_conf_name: 5_target_r16_siamese_fcn_2_8.yaml

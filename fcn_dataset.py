@@ -117,12 +117,18 @@ class FCNTargetDataset(FCNDataset):
 
     def transform(self, img, targ, lbl):
         img, lbl = super().transform(img, lbl)
+        targ = targ[:, :, ::-1]  # RGB -> BGR
+        targ = targ.astype(np.float64)
+        targ -= self.mean_bgr
         targ = targ.transpose(2, 0, 1)
-        targ = torch.from_numpy(targ.astype(np.float64)).float()
+        targ = torch.from_numpy(targ).float()
         return img, targ, lbl
 
     def untransform(self, img, targ, lbl):
         img, lbl = super().untransform(img, lbl)
         targ = targ.numpy()
-        targ = targ.transpose(1, 2, 0).astype(np.uint8)
+        targ = targ.transpose(1, 2, 0)
+        targ += self.mean_bgr
+        targ = targ.astype(np.uint8)
+        targ = targ[:, :, ::-1]
         return img, targ, lbl
