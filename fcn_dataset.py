@@ -83,7 +83,7 @@ class FCNTargetDataset(FCNDataset):
 
         self.files = collections.defaultdict(list)
         inds = np.load(osp.join(root, '{}_indices.npy'.format(split)))
-        if max_inds:
+        if max_ind:
             inds = inds[:max_ind]
         for i in inds:
             img_file = osp.join(root, imgs, 'image_{:06d}.png'.format(i))
