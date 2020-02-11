@@ -16,7 +16,7 @@ class FCNDataset(data.Dataset):
 
     def __init__(self, root, split='train', 
                  imgs='color_ims', lbls='soft_dist_ims', 
-                 transform=False, max_inds=0):
+                 transform=False, max_ind=0):
         self.root = root
         self.split = split
         self._transform = transform
@@ -24,8 +24,8 @@ class FCNDataset(data.Dataset):
 
         self.files = collections.defaultdict(list)
         inds = np.load(osp.join(root, '{}_indices.npy'.format(split)))
-        if max_inds:
-            inds = inds[:max_inds]
+        if max_ind:
+            inds = inds[:max_ind]
         for i in inds:
             img_file = osp.join(root, imgs, 'image_{:06d}.png'.format(i))
             lbl_file = osp.join(root, lbls, 'image_{:06d}.png'.format(i))
@@ -75,7 +75,7 @@ class FCNTargetDataset(FCNDataset):
 
     def __init__(self, root, split='train', 
                  imgs='color_ims', targs='target_ims', lbls='soft_dist_ims', 
-                 transform=False, max_inds=0):
+                 transform=False, max_ind=0):
         self.root = root
         self.split = split
         self._transform = transform
@@ -84,7 +84,7 @@ class FCNTargetDataset(FCNDataset):
         self.files = collections.defaultdict(list)
         inds = np.load(osp.join(root, '{}_indices.npy'.format(split)))
         if max_inds:
-            inds = inds[:max_inds]
+            inds = inds[:max_ind]
         for i in inds:
             img_file = osp.join(root, imgs, 'image_{:06d}.png'.format(i))
             targ_file = osp.join(root, targs, 'image_{:06d}.png'.format(i))

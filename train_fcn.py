@@ -223,7 +223,7 @@ if __name__ == "__main__":
 
     now = datetime.datetime.now()
     
-    out = osp.join(config['model']['path'], config['model']['name'] + now.strftime('%Y%m%d_%H%M%S.%f'))
+    out = osp.join(config['model']['path'], config['model']['name'])
     os.makedirs(out)
     config.save(os.path.join(out, config['save_conf_name']))
 
@@ -241,7 +241,7 @@ if __name__ == "__main__":
     start_epoch = 0
     start_iteration = 0
     if conf_args.resume:
-        checkpoint = torch.load(config['model']['path'])
+        checkpoint = torch.load(osp.join(out, 'checkpoint.pth.tar'))
         model.load_state_dict(checkpoint['model_state_dict'])
         start_epoch = checkpoint['epoch']
         start_iteration = checkpoint['iteration']
