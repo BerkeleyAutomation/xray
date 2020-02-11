@@ -11,6 +11,7 @@ from torch.autograd import Variable
 import tqdm
 from torchvision.models.segmentation import fcn_resnet50
 from autolab_core import YamlConfig
+from autolab_core.utils import keyboard_input
 
 import utils
 import fcn_dataset
@@ -224,7 +225,12 @@ if __name__ == "__main__":
     now = datetime.datetime.now()
     
     out = osp.join(config['model']['path'], config['model']['name'])
-    os.makedirs(out)
+    if osp.exists(out):
+        response = keyboard_input('A model folder already exists at {}. Would you like to overwrite?'.format(out), yesno=True)
+        if response.lower() == 'n':
+            os.exit()
+    else:
+        os.makedirs(out)
     config.save(os.path.join(out, config['save_conf_name']))
 
     os.environ['CUDA_VISIBLE_DEVICES'] = str(config['model']['gpu'])
