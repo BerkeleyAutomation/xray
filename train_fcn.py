@@ -221,15 +221,18 @@ if __name__ == "__main__":
 
     # read in config file information from proper section
     config = YamlConfig(conf_args.conf_file)
+    resume = conf_args.resume
 
     now = datetime.datetime.now()
     
     out = osp.join(config['model']['path'], config['model']['name'])
-    if osp.exists(out) and not conf_args.resume:
+    if osp.exists(out) and not resume:
         response = keyboard_input('A model folder already exists at {}. Would you like to overwrite?'.format(out), yesno=True)
         if response.lower() == 'n':
             os.exit()
-    elif not osp.exists(out):
+    elif osp.exists(out) and resume:
+        resume = resume and osp.exists(osp.join(out, 'checkpoint.pth.tar'))
+    else osp.exists(out):
         os.makedirs(out)
     config.save(os.path.join(out, config['save_conf_name']))
 
@@ -246,7 +249,7 @@ if __name__ == "__main__":
     model = siamese_fcn() if siamese else fcn_resnet50(num_classes=1)
     start_epoch = 0
     start_iteration = 0
-    if conf_args.resume and osp.exists(osp.join(out, 'checkpoint.pth.tar')):
+    if resume:
         checkpoint = torch.load(osp.join(out, 'checkpoint.pth.tar'))
         model.load_state_dict(checkpoint['model_state_dict'])
         start_epoch = checkpoint['epoch']
@@ -269,12 +272,12 @@ if __name__ == "__main__":
         lr=config['model']['lr'],
         momentum=config['model']['momentum'],
         weight_decay=config['model']['weight_decay'])
-    if conf_args.resume:
+    if resume:
         optim.load_state_dict(checkpoint['optim_state_dict'])
 
     # If using mixed precision training, initialize here
     if APEX_AVAILABLE:
-        if conf_args.resume:
+        if resume:
             amp.load_state_dict(checkpoint['amp'])
         model, optim = amp.initialize(
             model, optim, opt_level="O3", 
