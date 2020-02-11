@@ -232,7 +232,7 @@ if __name__ == "__main__":
             os.exit()
     elif osp.exists(out) and resume:
         resume = resume and osp.exists(osp.join(out, 'checkpoint.pth.tar'))
-    else osp.exists(out):
+    else:
         os.makedirs(out)
     config.save(os.path.join(out, config['save_conf_name']))
 
