@@ -225,11 +225,11 @@ if __name__ == "__main__":
     now = datetime.datetime.now()
     
     out = osp.join(config['model']['path'], config['model']['name'])
-    if osp.exists(out):
+    if osp.exists(out) and not conf_args.resume:
         response = keyboard_input('A model folder already exists at {}. Would you like to overwrite?'.format(out), yesno=True)
         if response.lower() == 'n':
             os.exit()
-    else:
+    elif not osp.exists(out):
         os.makedirs(out)
     config.save(os.path.join(out, config['save_conf_name']))
 
@@ -246,7 +246,7 @@ if __name__ == "__main__":
     model = siamese_fcn() if siamese else fcn_resnet50(num_classes=1)
     start_epoch = 0
     start_iteration = 0
-    if conf_args.resume:
+    if conf_args.resume and osp.exists(osp.join(out, 'checkpoint.pth.tar')):
         checkpoint = torch.load(osp.join(out, 'checkpoint.pth.tar'))
         model.load_state_dict(checkpoint['model_state_dict'])
         start_epoch = checkpoint['epoch']
