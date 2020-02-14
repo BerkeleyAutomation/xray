@@ -26,16 +26,15 @@ class SiameseFCN(nn.Module):
 
     def __init__(self, backbone, classifier):
         super(SiameseFCN, self).__init__()
-        self.backbone1 = backbone
-        self.backbone2 = copy.deepcopy(backbone)
+        self.backbone = backbone
         self.classifier = classifier
 
     def forward(self, im, targ):
         input_shape = im.shape[-2:]
         
         # contract: features is a dict of tensors
-        features_im = self.backbone1(im)["out"]
-        features_targ = self.backbone2(targ)["out"].view(features_im.shape[0], features_im.shape[1], -1, features_im.shape[-1])
+        features_im = self.backbone(im)["out"]
+        features_targ = self.backbone(targ)["out"].view(features_im.shape[0], features_im.shape[1], -1, features_im.shape[-1])
 
         result = OrderedDict()
         x = torch.cat((features_im, features_targ), dim=2)

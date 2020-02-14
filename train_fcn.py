@@ -16,6 +16,7 @@ from autolab_core.utils import keyboard_input
 import utils
 import fcn_dataset
 from siamese_fcn import siamese_fcn
+from siamese_unet import SiameseUNet
 
 try:
     from apex import amp
@@ -89,7 +90,9 @@ class Trainer(object):
             lbl = data[-1]
             with torch.no_grad():
                 score = self.model(*data[:-1])
-            score = score['out'].squeeze()
+            if isinstance(score, dict):
+                score = score['out']
+            score = score.squeeze()
             
             # pos_weight = (target.nelement() - target.sum()) / target.sum()
             # x_ent_2D = torch.nn.BCEWithLogitsLoss(reduction=self.reduction, pos_weight=pos_weight)
@@ -167,7 +170,10 @@ class Trainer(object):
             data = tuple([Variable(d) for d in data])
             lbl = data[-1]
             self.optim.zero_grad()
-            score = self.model(*data[:-1])['out'].squeeze()
+            score = self.model(*data[:-1])
+            if isinstance(score, dict):
+                score = score['out']
+            score = score.squeeze()
 
             # pos_weight = (target.nelement() - target.sum()) / target.sum()
             # x_ent_2D = torch.nn.BCEWithLogitsLoss(reduction=self.reduction, pos_weight=pos_weight)
@@ -223,8 +229,6 @@ if __name__ == "__main__":
     config = YamlConfig(conf_args.conf_file)
     resume = conf_args.resume
 
-    now = datetime.datetime.now()
-    
     out = osp.join(config['model']['path'], config['model']['name'])
     if osp.exists(out) and not resume:
         response = keyboard_input('A model folder already exists at {}. Would you like to overwrite?'.format(out), yesno=True)
@@ -245,8 +249,14 @@ if __name__ == "__main__":
         torch.backends.cudnn.benchmark = True
 
     # 1. model
-    siamese = (config['model']['type'] == 'siamese_fcn')
-    model = siamese_fcn() if siamese else fcn_resnet50(num_classes=1)
+    siamese = ('siamese' in config['model']['type'])
+    unet = ('unet' in config['model']['type'])
+    if siamese and unet:
+        model = SiameseUNet(3, 1)
+    elif siamese:
+        model = siamese_fcn()
+    else:
+        model = fcn_resnet50(num_classes=1)
     start_epoch = 0
     start_iteration = 0
     if resume:
