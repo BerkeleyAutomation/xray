@@ -112,6 +112,7 @@ class Trainer(object):
                 if len(visualizations) < 9:
                     viz = utils.visualize_segmentation(lbl_pred=d[-1], lbl_true=dd[-1], img=dd[0])
                     visualizations.append(viz)
+        
         metrics = utils.label_accuracy_score(label_trues, label_preds)
 
         out = osp.join(self.out, 'visualization_viz')
@@ -152,9 +153,11 @@ class Trainer(object):
     def train_epoch(self):
         self.model.train()
 
-        for batch_idx, data in tqdm.tqdm(
+        train_bar = tqdm.tqdm(
                 enumerate(self.train_loader), total=len(self.train_loader),
-                desc='Train epoch=%d' % self.epoch, ncols=80, leave=False):
+                desc='Train epoch=%d' % self.epoch, ncols=80, leave=False)
+
+        for batch_idx, data in train_bar:
             iteration = batch_idx + self.epoch * len(self.train_loader)
             if self.iteration != 0 and (iteration - 1) != self.iteration:
                 continue  # for resuming
@@ -190,6 +193,7 @@ class Trainer(object):
                 loss.backward()
             self.optim.step()
             loss_data /= len(score)
+            train_bar.set_postfix_str('Loss: {:.3f}'.format(loss_data))
 
             # lbl_pred = torch.sigmoid(score).data.cpu().numpy()
             lbl_pred = score.data.cpu().numpy()
@@ -271,8 +275,16 @@ if __name__ == "__main__":
     # 2. dataset
     root = config['dataset']['path']
     kwargs = {'num_workers': 4, 'pin_memory': True} if cuda else {}
-    train_set = fcn_dataset.FCNTargetDataset(root, split='train', imgs=config['dataset']['imgs'], targs=config['dataset']['targs'],lbls=config['dataset']['lbls'], transform=True) if siamese else fcn_dataset.FCNDataset(root, split='train', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], transform=True)
-    val_set = fcn_dataset.FCNTargetDataset(root, split='test', imgs=config['dataset']['imgs'], targs=config['dataset']['targs'],lbls=config['dataset']['lbls'], transform=True) if siamese else fcn_dataset.FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], transform=True)
+    train_set = fcn_dataset.FCNTargetDataset(root, split='train', imgs=config['dataset']['imgs'], 
+                                             targs=config['dataset']['targs'], lbls=config['dataset']['lbls'], 
+                                             mean=config['dataset']['mean'], transform=True) if siamese  \
+                else fcn_dataset.FCNDataset(root, split='train', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
+                                            mean=config['dataset']['mean'], transform=True)
+    val_set = fcn_dataset.FCNTargetDataset(root, split='test', imgs=config['dataset']['imgs'], 
+                                           targs=config['dataset']['targs'], lbls=config['dataset']['lbls'], 
+                                           mean=config['dataset']['mean'], transform=True) if siamese  \
+              else fcn_dataset.FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
+                                          mean=config['dataset']['mean'], transform=True)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
     val_loader = torch.utils.data.DataLoader(val_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
 

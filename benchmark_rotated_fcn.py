@@ -45,6 +45,7 @@ from torchvision.models.segmentation import fcn_resnet50
 from autolab_core import YamlConfig
 from prettytable import PrettyTable
 import cv2
+import imutils
 
 import utils
 import fcn_dataset
@@ -56,41 +57,6 @@ try:
 except ModuleNotFoundError:
     APEX_AVAILABLE = False
 
-def cv2_clipped_zoom(img, zoom_factor):
-    """
-    Center zoom in/out of the given image and returning an enlarged/shrinked view of 
-    the image without changing dimensions
-    Args:
-        img : Image array
-        zoom_factor : amount of zoom as a ratio (0 to Inf)
-    """
-    if zoom_factor == 1:
-        return img
-
-    height, width = img.shape[-2:] # It's also the final desired shape
-    new_height, new_width = int(height * zoom_factor), int(width * zoom_factor)
-
-    ### Crop only the part that will remain in the result (more efficient)
-    # Centered bbox of the final desired size in resized (larger/smaller) image coordinates
-    y1, x1 = max(0, new_height - height) // 2, max(0, new_width - width) // 2
-    y2, x2 = y1 + height, x1 + width
-    bbox = np.array([y1,x1,y2,x2])
-    # Map back to original image coordinates
-    bbox = (bbox / zoom_factor).astype(np.int)
-    y1, x1, y2, x2 = bbox
-    cropped_img = img.numpy()[..., y1:y2, x1:x2]
-    cropped_img = cropped_img.reshape((-1, *cropped_img.shape[-2:])).transpose(1,2,0)
-
-    # Handle padding when downscaling
-    resize_height, resize_width = min(new_height, height), min(new_width, width)
-    pad_height1, pad_width1 = (height - resize_height) // 2, (width - resize_width) //2
-    pad_height2, pad_width2 = (height - resize_height) - pad_height1, (width - resize_width) - pad_width1
-    pad_spec = [(pad_height1, pad_height2), (pad_width1, pad_width2), (0,0)]
-
-    result = cv2.resize(cropped_img, (resize_width, resize_height))
-    result = np.pad(result, pad_spec, mode='edge')
-    assert result.shape[0] == height and result.shape[1] == width
-    return torch.from_numpy(result.transpose(2,0,1).reshape(img.shape)).float()
 
 def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False):
     """Benchmarks a model."""
@@ -107,17 +73,23 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
             enumerate(data_loader), total=len(data_loader),
             desc='Benchmark Progress', ncols=80,
             leave=False):
-        data[0] = cv2_clipped_zoom(data[0], 1 / config['scale'])
+        rotated_ims = np.zeros((16, *data[0].shape[1:]))
+        for i,angle in enumerate(np.arange(0, 360, 360 / 16)):
+            rotated_ims[i] = imutils.rotate(data[0].squeeze().numpy().T, angle).T
+        data[0] = torch.from_numpy(rotated_ims).float()
         if cuda:
             data = [d.cuda() for d in data]
         data = [Variable(d) for d in data]
         lbl = data[-1]
         with torch.no_grad():
             score = model(*tuple(data[:-1]))
-        score = score['out'].squeeze()
-        score = cv2_clipped_zoom(score.cpu(), config['scale']).cuda()
-        data[0] = cv2_clipped_zoom(data[0].cpu(), config['scale']).cuda()
-        
+        score = score['out']
+        rotated_scores = np.zeros_like(score.cpu())
+        for i,angle in enumerate(np.arange(0, 360, 360 / 16)):
+            rotated_scores[i] = imutils.rotate(score.squeeze().cpu().numpy()[i], -angle)
+        rotated_scores = 255 * (rotated_scores.sum(axis=0) / rotated_scores.sum(axis=0).max())
+        score = torch.from_numpy(rotated_scores).float().cuda()
+        data[0] = data[0][0:1]
         loss = torch.nn.MSELoss()(score, lbl)
         loss_data = loss.data.item()
         if np.isnan(loss_data):

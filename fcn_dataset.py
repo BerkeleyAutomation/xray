@@ -16,9 +16,11 @@ class FCNDataset(data.Dataset):
 
     def __init__(self, root, split='train', 
                  imgs='color_ims', lbls='soft_dist_ims', 
-                 transform=False, max_ind=0):
+                 mean=None, transform=False, max_ind=0):
         self.root = root
         self.split = split
+        if mean is not None:
+            self.mean_bgr = np.array(mean)
         self._transform = transform
         self._soft = ('soft' in lbls)
 
@@ -75,9 +77,11 @@ class FCNTargetDataset(FCNDataset):
 
     def __init__(self, root, split='train', 
                  imgs='color_ims', targs='target_ims', lbls='soft_dist_ims', 
-                 transform=False, max_ind=0):
+                 mean=None, transform=False, max_ind=0):
         self.root = root
         self.split = split
+        if mean is not None:
+            self.mean_bgr = np.array(mean)
         self._transform = transform
         self._soft = ('soft' in lbls)
 

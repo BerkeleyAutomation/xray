@@ -1,18 +1,19 @@
-output_dir: /nfs/diskstation/projects/mech_search/prob_pose/benchmark_results/benchmark_multi/benchmark_5_target
+output_dir: /nfs/diskstation/projects/mech_search/prob_pose/benchmark_results/benchmark_multi/benchmark_ar1_flat_lid/
 save_conf_name: config.yaml
+scale: 2
 
 model:
-  type: siamese_fcn
-  path: /nfs/diskstation/projects/mech_search/prob_pose/models/5_target_r16_siamese_fcn_2_820200208_232932.399756/
-  gpu: 1
+  type: fcn
+  path: /nfs/diskstation/projects/mech_search/prob_pose/models/single_goal_rotations/box_1_r16_fine_fcn_2_620200206_183634.222720/
+  gpu: 0
   batch_size: 8
 
 dataset:
-  path: /nfs/diskstation/projects/mech_search/prob_pose/datasets/multi_goal_datasets/5_target_r16_dataset/images
+  path: /nfs/diskstation/projects/mech_search/prob_pose/datasets/soft_single_goal_datasets/flat_lid_test_only_dataset/images/
   imgs: 'color_ims'
-  targs: 'target_ims'
+  # targs: 'target_ims'
   lbls: 'soft_dist_ims'
 
 # Visualization settings
 vis: 1
-vis_interval: 10
+vis_interval: 3

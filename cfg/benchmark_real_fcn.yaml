@@ -1,0 +1,12 @@
+device_id: 1
+scale: 2
+
+model:
+  type: fcn
+  path: /nfs/diskstation/projects/mech_search/prob_pose/models/single_goal_rotations/box_1_r16_fine_fcn_2_620200206_183634.222720/
+  gpu: 0
+  batch_size: 8
+
+# Visualization settings
+vis: 1
+vis_interval: 3
