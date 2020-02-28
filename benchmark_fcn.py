@@ -56,6 +56,11 @@ try:
 except ModuleNotFoundError:
     APEX_AVAILABLE = False
 
+def cv2_blur(img, kernel_size=5):
+    result = img.numpy().reshape((-1, *img.shape[-2:])).transpose(1,2,0)
+    result = cv2.GaussianBlur(result, (kernel_size, kernel_size), 0)
+    return torch.from_numpy(result.transpose(2,0,1).reshape(img.shape)).float()
+
 def cv2_clipped_zoom(img, zoom_factor):
     """
     Center zoom in/out of the given image and returning an enlarged/shrinked view of 
@@ -107,14 +112,17 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
             enumerate(data_loader), total=len(data_loader),
             desc='Benchmark Progress', ncols=80,
             leave=False):
+        # data[0] = cv2_blur(data[0], kernel_size=11)
         data[0] = cv2_clipped_zoom(data[0], 1 / config['scale'])
         if cuda:
             data = [d.cuda() for d in data]
         data = [Variable(d) for d in data]
         lbl = data[-1]
         with torch.no_grad():
-            score = model(*tuple(data[:-1]))
-        score = score['out'].squeeze()
+            score = model(*data[:-1])
+        if isinstance(score, dict):
+            score = score['out']
+        score = score.squeeze()
         score = cv2_clipped_zoom(score.cpu(), config['scale']).cuda()
         data[0] = cv2_clipped_zoom(data[0].cpu(), config['scale']).cuda()
         
@@ -124,7 +132,7 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
             raise ValueError('loss is nan while benchmarking')
         benchmark_loss += loss_data / len(score)
         
-        data = tuple([d.data.cpu() for d in data])
+        data = [d.data.cpu() for d in data]
         lbl_pred = score.data.cpu().numpy()
         for d in zip(*data, lbl_pred):
             dd = data_loader.dataset.untransform(*d[:-1])
@@ -142,8 +150,12 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
     metrics = utils.label_accuracy_score(label_trues, label_preds)
     benchmark_loss /= len(data_loader)
     
-    t = PrettyTable(['#Img', 'Loss', 'Acc', 'Bal-Acc', 'IoU'])
-    t.add_row([len(data_loader)] + [benchmark_loss] + list(metrics))
+    t = PrettyTable(['N', 'Loss', 'Acc', 'Bal-Acc', 'IoU'])
+    t.add_row([data_loader.batch_size * len(data_loader)] + [benchmark_loss] + list(metrics))
+    res = {k: v if isinstance(v, int) else float(v) for (k,v) in zip(t._field_names, t._rows[0])}
+    results = YamlConfig()
+    results.update(res)
+    results.save(os.path.join(output_dir, 'results.yaml'))
     print(t)
 
 
@@ -158,7 +170,7 @@ if __name__ == "__main__":
     # read in config file information from proper section
     config = YamlConfig(conf_args.conf_file)
 
-    print("Benchmarking model.")
+    print("Benchmarking model")
 
     # Create new directory for outputs
     output_dir = config['output_dir']
@@ -192,15 +204,17 @@ if __name__ == "__main__":
     # 2. dataset
     root = config['dataset']['path']
     kwargs = {'num_workers': 4, 'pin_memory': True} if cuda else {}
-    test_set = fcn_dataset.FCNTargetDataset(root, split='test', imgs=config['dataset']['imgs'], targs=config['dataset']['targs'], lbls=config['dataset']['lbls'], transform=True) if siamese else fcn_dataset.FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], transform=True)
+    test_set = fcn_dataset.FCNTargetDataset(root, split='test', imgs=config['dataset']['imgs'], 
+                                           targs=config['dataset']['targs'], lbls=config['dataset']['lbls'], 
+                                           mean=config['dataset']['mean'], transform=True) if siamese  \
+              else fcn_dataset.FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
+                                          mean=config['dataset']['mean'], transform=True)
     data_loader = torch.utils.data.DataLoader(test_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
 
     # If using mixed precision training, initialize here
     if APEX_AVAILABLE:
-        # amp.load_state_dict(checkpoint['amp'])
         model = amp.initialize(
-            model, opt_level="O3", 
-            keep_batchnorm_fp32=True
-        )
+            model, opt_level="O1")
+        amp.load_state_dict(checkpoint['amp'])
 
     benchmark(output_dir, model, data_loader, config, cuda=cuda, use_amp=APEX_AVAILABLE)

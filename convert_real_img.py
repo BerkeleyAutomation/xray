@@ -1,4 +1,4 @@
-from perception import WebcamSensor
+from phoxipy import ColorizedPhoXiSensor
 import matplotlib.pyplot as plt
 
 import datetime
@@ -13,9 +13,11 @@ import torch
 from torch.autograd import Variable
 import tqdm
 from torchvision.models.segmentation import fcn_resnet50
-from autolab_core import YamlConfig
+from autolab_core import YamlConfig, Logger
+from autolab_core.utils import keyboard_input
 from prettytable import PrettyTable
 import cv2
+from perception import ColorImage
 
 import utils
 import fcn_dataset
@@ -76,7 +78,10 @@ if __name__ == "__main__":
     # read in config file information from proper section
     config = YamlConfig(conf_args.conf_file)
 
-    print("Benchmarking model")
+    # set up logger
+    logger = Logger.get_logger(__file__)
+
+    logger.info("Benchmarking model")
 
     os.environ['CUDA_VISIBLE_DEVICES'] = str(config['model']['gpu'])
     cuda = torch.cuda.is_available()
@@ -101,34 +106,50 @@ if __name__ == "__main__":
         model = model.cuda()
 
     # 2. camera
-    cam = WebcamSensor(device_id=config['device_id'])
+    cam = ColorizedPhoXiSensor(config['phoxi_name'], 
+                               config['device_id'], 
+                               '/nfs/diskstation/calib/')
     cam.start()
-
+    
     # If using mixed precision training, initialize here
     if APEX_AVAILABLE:
-        # amp.load_state_dict(checkpoint['amp'])
         model = amp.initialize(
-            model, opt_level="O3", 
-            keep_batchnorm_fp32=True
+            model, opt_level="O1" 
         )
+        amp.load_state_dict(checkpoint['amp'])
     model.eval()
+
+    response = keyboard_input('Ready to take images?', yesno=True)
+    while response.lower() != 'y':
+        response = keyboard_input('Ready to take images?', yesno=True)
 
     while True:
         # Read frame from camera and convert
-        frame = cam.frames()[0]
-        gray_frame = np.repeat(frame.to_grayscale().data[...,None], 3, axis=-1)
-        red_mask = np.logical_and(frame.data[:,:,0] > 250, np.logical_and(frame.data[:,:,1] < 150, frame.data[:,:,2] < 150))
-        gray_frame[red_mask, :] = frame.data[red_mask, :]
+        color_im, depth_im, _ = cam.read()
+        depth_im = depth_im.crop(512, 683, center_i=356, center_j=542).inpaint()
+        color_im = color_im.crop(512, 683, center_i=356, center_j=542).inpaint()
+        color_im = cv2.resize(color_im.data, (512, 384))
+        depth_im = cv2.resize(depth_im.data, (512, 384))
 
-        img = cv2.resize(gray_frame, (512, 384))
-        mean_rgb = img.mean(axis=(0,1))
+        # Create combo image from depth image and opencv red detector
+        color_hsv = cv2.cvtColor(np.flip(color_im, axis=-1), cv2.COLOR_BGR2HSV)
+        mask1 = cv2.inRange(color_hsv,  np.array([0,120,70]), np.array([10,255,255]))
+        mask2 = cv2.inRange(color_hsv, np.array([170,120,70]), np.array([180,255,255]))
+        color_mask = (mask1 + mask2).astype(np.bool)
+        combo_im = np.iinfo(np.uint8).max * (depth_im - 0.25) / (1.0 - 0.25)
+        combo_im = np.repeat(combo_im[...,None], 3, axis=-1).astype(np.uint8)
+        combo_im[color_mask, 0] = 255
+        combo_im[~color_mask, 0] = 0
 
+        mean_bgr = np.array([0.0, 181.0, 181.0])
+        img = combo_im[:, :, ::-1]  # RGB -> BGR
         img = img.astype(np.float64)
-        img -= mean_rgb
-        img = img[:, :, ::-1].copy()  # RGB -> BGR
+        img -= mean_bgr
         img = img.transpose(2, 0, 1)
-        img = torch.from_numpy(img[None,...]).float()
+        img = torch.from_numpy(img[None,...]).float()        
         img = cv2_clipped_zoom(img, 1 / config['scale'])
+
+        # np.savez('test_ds/test_{:03d}'.format(i), img.numpy())
         if cuda:
             img = img.cuda()
         with torch.no_grad():
@@ -139,22 +160,23 @@ if __name__ == "__main__":
 
         img = img.numpy().squeeze()
         img = img.transpose(1, 2, 0)
-        img = img[:, :, ::-1]
-        img += mean_rgb
+        img += mean_bgr
         img = img.astype(np.uint8)
+        img = img[:, :, ::-1]
 
         plt.figure()
         plt.subplot(2,2,1)
-        plt.imshow(frame.data)
+        plt.imshow(img)
         plt.axis('off')
         plt.subplot(2,2,2)
         plt.imshow(score.squeeze().numpy(), cmap='jet')
         plt.axis('off')
         plt.subplot(2,2,3)
-        plt.imshow(img)
+        plt.imshow(color_im)
         plt.axis('off')
         plt.subplot(2,2,4)
-        plt.imshow(img)
+        plt.imshow(color_im)
         plt.imshow(score.squeeze().numpy(), cmap='jet', alpha=0.5)
         plt.axis('off')
+        plt.subplots_adjust(left=0.02, right=0.98, bottom=0.02, top=0.98, wspace=0.02, hspace=0.02)
         plt.show()

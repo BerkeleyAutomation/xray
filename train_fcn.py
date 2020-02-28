@@ -85,8 +85,8 @@ class Trainer(object):
                 desc='Valid iteration=%d' % self.iteration, ncols=80,
                 leave=False):
             if self.cuda:
-                data = tuple([d.cuda() for d in data])
-            data = tuple([Variable(d) for d in data])
+                data = [d.cuda() for d in data]
+            data = [Variable(d) for d in data]
             lbl = data[-1]
             with torch.no_grad():
                 score = self.model(*data[:-1])
@@ -103,7 +103,7 @@ class Trainer(object):
                 raise ValueError('loss is nan while validating')
             val_loss += loss_data / len(score)
 
-            data = tuple([d.data.cpu() for d in data])
+            data = [d.data.cpu() for d in data]
             lbl_pred = score.data.cpu().numpy()
             for d in zip(*data, lbl_pred):
                 dd = self.val_loader.dataset.untransform(*d[:-1])
@@ -169,8 +169,8 @@ class Trainer(object):
             assert self.model.training
 
             if self.cuda:
-                data = tuple([d.cuda() for d in data])
-            data = tuple([Variable(d) for d in data])
+                data = [d.cuda() for d in data]
+            data = [Variable(d) for d in data]
             lbl = data[-1]
             self.optim.zero_grad()
             score = self.model(*data[:-1])
@@ -299,12 +299,12 @@ if __name__ == "__main__":
 
     # If using mixed precision training, initialize here
     if APEX_AVAILABLE:
-        if resume:
-            amp.load_state_dict(checkpoint['amp'])
         model, optim = amp.initialize(
-            model, optim, opt_level="O3", 
-            keep_batchnorm_fp32=True, loss_scale="dynamic"
+            model, optim, opt_level="O1", 
+            loss_scale="dynamic"
         )
+        if resume:  
+            amp.load_state_dict(checkpoint['amp'])
 
     trainer = Trainer(
         cuda=cuda,

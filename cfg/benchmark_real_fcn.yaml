@@ -1,12 +1,9 @@
-device_id: 1
+phoxi_name: '2018-02-020-LC3'
+device_id: 0
 scale: 2
+mean: [0.0, 181.0, 181.0]
 
 model:
   type: fcn
-  path: /nfs/diskstation/projects/mech_search/prob_pose/models/single_goal_rotations/box_1_r16_fine_fcn_2_620200206_183634.222720/
-  gpu: 0
-  batch_size: 8
-
-# Visualization settings
-vis: 1
-vis_interval: 3
+  path: /nfs/diskstation/projects/mech_search/prob_pose/models/box_1_combo_fcn_2_22/
+  gpu: 1

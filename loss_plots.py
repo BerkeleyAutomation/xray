@@ -40,14 +40,14 @@ if __name__ == '__main__':
         sns.lineplot(x='epoch', y='valid/bal_acc', data=data[data['epoch'] > 1], ax=axes2[1,1])
         sns.lineplot(x='epoch', y='valid/mean_iou', data=data[data['epoch'] > 1], ax=axes2[0,1])
     
-    custom_lines = [Line2D([0], [0], color=sns.color_palette()[0], lw=4),
-                    Line2D([0], [0], color=sns.color_palette()[1], lw=4),
-                    Line2D([0], [0], color=sns.color_palette()[2], lw=4),
-                    Line2D([0], [0], color=sns.color_palette()[3], lw=4)]
-    f2.legend(custom_lines, ['Aspect Ratio 1', 'Aspect Ratio 2', 'Aspect Ratio 5', 'Aspect Ratio 10'], 
-              bbox_to_anchor=(0.2,0.82,0.6,0.2), loc='center', mode="expand", borderaxespad=0, ncol=4)
-    f1.legend(custom_lines, ['Aspect Ratio 1', 'Aspect Ratio 2', 'Aspect Ratio 5', 'Aspect Ratio 10'], 
-              bbox_to_anchor=(0.2,0.82,0.6,0.2), loc='center', mode="expand", borderaxespad=0, ncol=4)
-    f1.savefig(os.path.join(output_path, 'training_plots.png')) #, bbox_inches='tight'
-    f2.savefig(os.path.join(output_path, 'validation_plots.png')) #, bbox_inches='tight'
+    # custom_lines = [Line2D([0], [0], color=sns.color_palette()[0], lw=4),
+    #                 Line2D([0], [0], color=sns.color_palette()[1], lw=4),
+    #                 Line2D([0], [0], color=sns.color_palette()[2], lw=4),
+    #                 Line2D([0], [0], color=sns.color_palette()[3], lw=4)]
+    # f2.legend(custom_lines, ['Aspect Ratio 1', 'Aspect Ratio 2', 'Aspect Ratio 5', 'Aspect Ratio 10'], 
+    #           bbox_to_anchor=(0.2,0.82,0.6,0.2), loc='center', mode="expand", borderaxespad=0, ncol=4)
+    # f1.legend(custom_lines, ['Aspect Ratio 1', 'Aspect Ratio 2', 'Aspect Ratio 5', 'Aspect Ratio 10'], 
+    #           bbox_to_anchor=(0.2,0.82,0.6,0.2), loc='center', mode="expand", borderaxespad=0, ncol=4)
+    f1.savefig(os.path.join(output_path, 'training_plots.png'), bbox_inches='tight')
+    f2.savefig(os.path.join(output_path, 'validation_plots.png'), bbox_inches='tight')
     # plt.show()
