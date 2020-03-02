@@ -45,6 +45,7 @@ from torchvision.models.segmentation import fcn_resnet50
 from autolab_core import YamlConfig
 from prettytable import PrettyTable
 import cv2
+import matplotlib.pyplot as plt
 
 import utils
 import fcn_dataset
@@ -140,12 +141,22 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
             label_preds.append(d[-1])
         
         if config['vis'] and batch_idx % config['vis_interval'] == 0:
+            out_file = osp.join(out, 'vis_{{}}_{num:03d}.png'.format(num=int(batch_idx / config['vis_interval'])))
             if len(dd) > 2:
                 viz = utils.visualize_segmentation(lbl_pred=d[-1], lbl_true=dd[-1], img=dd[0], targ=dd[1])     
             else:
-                viz = utils.visualize_segmentation(lbl_pred=d[-1], lbl_true=dd[-1], img=dd[0])        
-            out_file = osp.join(out, 'vis_sample_{:03d}.jpg'.format(int(batch_idx / config['vis_interval'])))
-            skimage.io.imsave(out_file, viz)
+                gt = np.iinfo(np.uint8).max * plt.cm.jet(dd[-1].astype(np.uint8))
+                pred = d[-1]
+                pred = np.iinfo(np.uint8).max * plt.cm.jet(pred / pred.max())
+                
+                if 'vis_block' not in config.keys() or config['vis_block']:
+                    viz = utils.visualize_segmentation(lbl_pred=d[-1], lbl_true=dd[-1], img=dd[0])        
+                else:
+                    skimage.io.imsave(out_file.format('input'), dd[0])
+                    skimage.io.imsave(out_file.format('gt'), gt.astype(np.uint8))
+                    skimage.io.imsave(out_file.format('pred'), pred.astype(np.uint8))
+            if 'vis_block' not in config.keys() or config['vis_block']:
+                skimage.io.imsave(out_file.format('block'), viz)
 
     metrics = utils.label_accuracy_score(label_trues, label_preds)
     benchmark_loss /= len(data_loader)
@@ -209,7 +220,7 @@ if __name__ == "__main__":
                                            mean=config['dataset']['mean'], transform=True) if siamese  \
               else fcn_dataset.FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
                                           mean=config['dataset']['mean'], transform=True)
-    data_loader = torch.utils.data.DataLoader(test_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
+    data_loader = torch.utils.data.DataLoader(test_set, batch_size=config['model']['batch_size'], shuffle=False, **kwargs)
 
     # If using mixed precision training, initialize here
     if APEX_AVAILABLE:

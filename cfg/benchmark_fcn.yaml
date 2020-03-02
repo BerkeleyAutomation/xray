@@ -1,19 +1,21 @@
-output_dir: /nfs/diskstation/projects/mech_search/prob_pose/benchmark_results/benchmark_multi/benchmark_ar1_flat_lid/
+output_dir: /nfs/diskstation/projects/mech_search/prob_pose/benchmark_results/benchmark_combo/ar10_flat_lid
 save_conf_name: config.yaml
-scale: 2
+scale: 1
 
 model:
   type: fcn
-  path: /nfs/diskstation/projects/mech_search/prob_pose/models/single_goal_rotations/box_1_r16_fine_fcn_2_620200206_183634.222720/
+  path: /nfs/diskstation/projects/mech_search/prob_pose/models/box_10_combo_fcn_2_28_1e-5/
   gpu: 0
-  batch_size: 8
+  batch_size: 4
 
 dataset:
-  path: /nfs/diskstation/projects/mech_search/prob_pose/datasets/soft_single_goal_datasets/flat_lid_test_only_dataset/images/
-  imgs: 'color_ims'
+  path: /nfs/diskstation/projects/mech_search/prob_pose/datasets/soft_single_goal_datasets/combo/flat_lid_combo_test/images/
+  imgs: 'combo_ims'
   # targs: 'target_ims'
   lbls: 'soft_dist_ims'
+  mean: [181.0, 181.0, 0]
 
 # Visualization settings
 vis: 1
-vis_interval: 3
+vis_block: 1
+vis_interval: 10
