@@ -1,21 +1,21 @@
 model:
-  name: 5_target_r16_siamese_fcn_2_8
-  path: models/
-  type: siamese_fcn
+  name: test_test
+  path: /nfs/diskstation/projects/mech_search/prob_pose/models/
+  type: fcn
   max_iteration: 50000       # number of epochs to train for
   gpu: 0
-  batch_size: 48
+  batch_size: 8
   lr: 1e-4
   momentum: 0.99
   weight_decay: 0.0005
 
 dataset:
-  path: /home/mjd3/pose/probabilistic-poses/datasets/5_target_r16_dataset/images
-  imgs: 'color_ims'
-  targs: 'target_ims'
+  path: /nfs/diskstation/projects/mech_search/prob_pose/datasets/soft_single_goal_datasets/box_1_combo_dataset/images/
+  imgs: 'combo_ims'
   lbls: 'soft_dist_ims'
+  mean: [193.8, 193.8, 0]
 
 # name of the config file to save (within the dataset folder)
 # note that this will be overwritten between multiple runs so
 # you should name this uniquely for each run.
-save_conf_name: 5_target_r16_siamese_fcn_2_8.yaml
+save_conf_name: test.yaml

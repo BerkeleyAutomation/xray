@@ -11,7 +11,6 @@ model:
 dataset:
   path: /nfs/diskstation/projects/mech_search/prob_pose/datasets/soft_single_goal_datasets/combo/flat_lid_combo_test/images/
   imgs: 'combo_ims'
-  # targs: 'target_ims'
   lbls: 'soft_dist_ims'
   mean: [181.0, 181.0, 0]
 

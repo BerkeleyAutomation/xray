@@ -13,10 +13,9 @@ from torchvision.models.segmentation import fcn_resnet50
 from autolab_core import YamlConfig
 from autolab_core.utils import keyboard_input
 
-import utils
-import fcn_dataset
-from siamese_fcn import siamese_fcn
-from siamese_unet import SiameseUNet
+from xray import utils
+from xray import FCNDataset, FCNTargetDataset
+from xray import SiameseUNet, siamese_fcn
 
 try:
     from apex import amp
