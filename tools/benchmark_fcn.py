@@ -47,9 +47,9 @@ from prettytable import PrettyTable
 import cv2
 import matplotlib.pyplot as plt
 
-import utils
-import fcn_dataset
-from siamese_fcn import siamese_fcn
+from xray import utils
+from xray import FCNTargetDataset, FCNDataset
+from xray import siamese_fcn, SiameseUNet
 
 try:
     from apex import amp
@@ -215,10 +215,10 @@ if __name__ == "__main__":
     # 2. dataset
     root = config['dataset']['path']
     kwargs = {'num_workers': 4, 'pin_memory': True} if cuda else {}
-    test_set = fcn_dataset.FCNTargetDataset(root, split='test', imgs=config['dataset']['imgs'], 
+    test_set = FCNTargetDataset(root, split='test', imgs=config['dataset']['imgs'], 
                                            targs=config['dataset']['targs'], lbls=config['dataset']['lbls'], 
                                            mean=config['dataset']['mean'], transform=True) if siamese  \
-              else fcn_dataset.FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
+              else FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
                                           mean=config['dataset']['mean'], transform=True)
     data_loader = torch.utils.data.DataLoader(test_set, batch_size=config['model']['batch_size'], shuffle=False, **kwargs)
 

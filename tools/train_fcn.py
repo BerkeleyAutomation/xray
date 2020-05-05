@@ -274,15 +274,15 @@ if __name__ == "__main__":
     # 2. dataset
     root = config['dataset']['path']
     kwargs = {'num_workers': 4, 'pin_memory': True} if cuda else {}
-    train_set = fcn_dataset.FCNTargetDataset(root, split='train', imgs=config['dataset']['imgs'], 
+    train_set = FCNTargetDataset(root, split='train', imgs=config['dataset']['imgs'], 
                                              targs=config['dataset']['targs'], lbls=config['dataset']['lbls'], 
                                              mean=config['dataset']['mean'], transform=True) if siamese  \
-                else fcn_dataset.FCNDataset(root, split='train', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
+                else FCNDataset(root, split='train', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
                                             mean=config['dataset']['mean'], transform=True)
-    val_set = fcn_dataset.FCNTargetDataset(root, split='test', imgs=config['dataset']['imgs'], 
+    val_set = FCNTargetDataset(root, split='test', imgs=config['dataset']['imgs'], 
                                            targs=config['dataset']['targs'], lbls=config['dataset']['lbls'], 
                                            mean=config['dataset']['mean'], transform=True) if siamese  \
-              else fcn_dataset.FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
+              else FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
                                           mean=config['dataset']['mean'], transform=True)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
     val_loader = torch.utils.data.DataLoader(val_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
