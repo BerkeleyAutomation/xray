@@ -1,6 +1,7 @@
 from skimage.io import imread
 import numpy as np
 import os
+import tqdm
 import argparse
 
 if __name__ == "__main__":
@@ -10,7 +11,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     means = []
-    for f in os.listdir(args.directory):
+    for f in tqdm.tqdm(os.listdir(args.directory)):
         means.append(imread(os.path.join(args.directory, f)).mean(axis=(0,1)))
 
     print(np.mean(means, axis=0))

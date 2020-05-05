@@ -14,8 +14,7 @@ from autolab_core import YamlConfig
 from autolab_core.utils import keyboard_input
 
 from xray import utils
-from xray import FCNDataset, FCNTargetDataset
-from xray import SiameseUNet, siamese_fcn
+from xray import FCNRatioDataset
 
 try:
     from apex import amp
@@ -83,20 +82,19 @@ class Trainer(object):
                 enumerate(self.val_loader), total=len(self.val_loader),
                 desc='Valid iteration=%d' % self.iteration, ncols=80,
                 leave=False):
+
             if self.cuda:
                 data = [d.cuda() for d in data]
             data = [Variable(d) for d in data]
-            lbl = data[-1]
+            imgs, lbls, ratios = data
+
             with torch.no_grad():
-                score = self.model(*data[:-1])
+                score = self.model(imgs)
             if isinstance(score, dict):
                 score = score['out']
-            score = score.squeeze()
-            
-            # pos_weight = (target.nelement() - target.sum()) / target.sum()
-            # x_ent_2D = torch.nn.BCEWithLogitsLoss(reduction=self.reduction, pos_weight=pos_weight)
-            # loss = x_ent_2D(score, target)
-            loss = torch.nn.MSELoss()(score, lbl)
+            score = score.squeeze()[range(len(imgs)), ratios]
+
+            loss = torch.nn.MSELoss()(score, lbls)
             loss_data = loss.data.item()
             if np.isnan(loss_data):
                 raise ValueError('loss is nan while validating')
@@ -104,12 +102,12 @@ class Trainer(object):
 
             data = [d.data.cpu() for d in data]
             lbl_pred = score.data.cpu().numpy()
-            for d in zip(*data, lbl_pred):
-                dd = self.val_loader.dataset.untransform(*d[:-1])
-                label_trues.append(dd[-1])
-                label_preds.append(d[-1])
+            for img, lbl, pred in zip(data[0], data[1], lbl_pred):
+                img, lbl = self.val_loader.dataset.untransform(img, lbl)
+                label_trues.append(lbl)
+                label_preds.append(pred)
                 if len(visualizations) < 9:
-                    viz = utils.visualize_segmentation(lbl_pred=d[-1], lbl_true=dd[-1], img=dd[0])
+                    viz = utils.visualize_segmentation(lbl_pred=pred, lbl_true=lbl, img=img)
                     visualizations.append(viz)
         
         metrics = utils.label_accuracy_score(label_trues, label_preds)
@@ -170,17 +168,15 @@ class Trainer(object):
             if self.cuda:
                 data = [d.cuda() for d in data]
             data = [Variable(d) for d in data]
-            lbl = data[-1]
+            imgs, lbls, ratios = data
+            
             self.optim.zero_grad()
-            score = self.model(*data[:-1])
+            score = self.model(imgs)
             if isinstance(score, dict):
                 score = score['out']
-            score = score.squeeze()
+            score = score.squeeze()[range(len(imgs)), ratios]
 
-            # pos_weight = (target.nelement() - target.sum()) / target.sum()
-            # x_ent_2D = torch.nn.BCEWithLogitsLoss(reduction=self.reduction, pos_weight=pos_weight)
-            # loss = x_ent_2D(score, target)
-            loss = torch.nn.MSELoss()(score, lbl)
+            loss = torch.nn.MSELoss()(score, lbls)
             loss_data = loss.data.item()
             if np.isnan(loss_data):
                 raise ValueError('loss is nan while training')
@@ -194,10 +190,9 @@ class Trainer(object):
             loss_data /= len(score)
             train_bar.set_postfix_str('Loss: {:.3f}'.format(loss_data))
 
-            # lbl_pred = torch.sigmoid(score).data.cpu().numpy()
-            lbl_pred = score.data.cpu().numpy()
-            lbl_true = lbl.data.cpu().numpy()
-            metrics = utils.label_accuracy_score(lbl_true, lbl_pred)
+            lbls_pred = score.data.cpu().numpy()
+            lbls_true = lbls.data.cpu().numpy()
+            metrics = utils.label_accuracy_score(lbls_true, lbls_pred)
 
             with open(osp.join(self.out, 'log.csv'), 'a') as f:
                 elapsed_time = (
@@ -252,14 +247,9 @@ if __name__ == "__main__":
         torch.backends.cudnn.benchmark = True
 
     # 1. model
-    siamese = ('siamese' in config['model']['type'])
-    unet = ('unet' in config['model']['type'])
-    if siamese and unet:
-        model = SiameseUNet(3, 1)
-    elif siamese:
-        model = siamese_fcn()
-    else:
-        model = fcn_resnet50(num_classes=1)
+    ratios = config['model']['ratios']
+    ratio_map = {k:v for k,v in zip(ratios, range(len(ratios)))}
+    model = fcn_resnet50(num_classes=len(ratios))
     start_epoch = 0
     start_iteration = 0
     if resume:
@@ -274,16 +264,12 @@ if __name__ == "__main__":
     # 2. dataset
     root = config['dataset']['path']
     kwargs = {'num_workers': 4, 'pin_memory': True} if cuda else {}
-    train_set = FCNTargetDataset(root, split='train', imgs=config['dataset']['imgs'], 
-                                             targs=config['dataset']['targs'], lbls=config['dataset']['lbls'], 
-                                             mean=config['dataset']['mean'], transform=True) if siamese  \
-                else FCNDataset(root, split='train', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
-                                            mean=config['dataset']['mean'], transform=True)
-    val_set = FCNTargetDataset(root, split='test', imgs=config['dataset']['imgs'], 
-                                           targs=config['dataset']['targs'], lbls=config['dataset']['lbls'], 
-                                           mean=config['dataset']['mean'], transform=True) if siamese  \
-              else FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
-                                          mean=config['dataset']['mean'], transform=True)
+    train_set = FCNRatioDataset(root, split='train', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
+                                mean=config['dataset']['mean'], max_ind=config['dataset']['max_ind'], ratio_map=ratio_map,
+                                transform=True)
+    val_set = FCNRatioDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
+                              mean=config['dataset']['mean'], max_ind=config['dataset']['max_ind'], ratio_map=ratio_map,
+                              transform=True)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
     val_loader = torch.utils.data.DataLoader(val_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
 
@@ -297,7 +283,7 @@ if __name__ == "__main__":
         optim.load_state_dict(checkpoint['optim_state_dict'])
 
     # If using mixed precision training, initialize here
-    if APEX_AVAILABLE:
+    if APEX_AVAILABLE and False:
         model, optim = amp.initialize(
             model, optim, opt_level="O1", 
             loss_scale="dynamic"
@@ -313,7 +299,7 @@ if __name__ == "__main__":
         val_loader=val_loader,
         out=out,
         max_iter=config['model']['max_iteration'],
-        use_amp=APEX_AVAILABLE
+        use_amp=APEX_AVAILABLE and False
     )
     trainer.epoch = start_epoch
     trainer.iteration = start_iteration

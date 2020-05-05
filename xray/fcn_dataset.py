@@ -1,5 +1,6 @@
 import collections
 import os.path as osp
+import glob
 import numpy as np
 from skimage.io import imread
 import torch
@@ -136,3 +137,70 @@ class FCNTargetDataset(FCNDataset):
         targ = targ.astype(np.uint8)
         targ = targ[:, :, ::-1]
         return img, targ, lbl
+
+
+class FCNRatioDataset(data.Dataset):
+
+    mean_bgr = np.array([189.0995733, 189.0995733, 189.30626962])
+
+    def __init__(self, root, split='train', 
+                 imgs='combo_ims', lbls='dist_ims', 
+                 mean=None, ratio_map=None,
+                 transform=False, max_ind=0):
+        self.root = root
+        self.split = split
+        if mean is not None:
+            self.mean_bgr = np.array(mean)
+        self._transform = transform
+
+        self.files = collections.defaultdict(list)
+        inds = np.load(osp.join(root, '{}_indices.npy'.format(split)))
+        if max_ind:
+            inds = inds[:max_ind]
+        for i in inds:
+            img_files = glob.glob(osp.join(root, imgs, 'image_{:06d}_*.png'.format(i)))
+            lbl_files = glob.glob(osp.join(root, lbls, 'image_{:06d}_*.png'.format(i)))
+            for img, lbl in zip(img_files, lbl_files):
+                ratio = int(osp.splitext(img)[0].split('_')[-1])
+                self.files[split].append({
+                    'img': img,
+                    'lbl': lbl,
+                    'ratio': ratio if not ratio_map else ratio_map[ratio]
+                })
+
+    def __len__(self):
+        return len(self.files[self.split])
+
+    def __getitem__(self, index):
+        data_file = self.files[self.split][index]
+        
+        # load image
+        img_file = data_file['img']
+        img = imread(img_file)
+
+        # load label
+        lbl_file = data_file['lbl']
+        lbl = imread(lbl_file)
+        if self._transform:
+            img, lbl = self.transform(img, lbl)
+
+        ratio = data_file['ratio']
+        return img, lbl, ratio
+
+    def transform(self, img, lbl):
+        img = img[:, :, ::-1]  # RGB -> BGR
+        img = img.astype(np.float64)
+        img -= self.mean_bgr
+        img = img.transpose(2, 0, 1)
+        img = torch.from_numpy(img).float()
+        lbl = torch.from_numpy(lbl).float()
+        return img, lbl
+
+    def untransform(self, img, lbl):
+        img = img.numpy()
+        img = img.transpose(1, 2, 0)
+        img += self.mean_bgr
+        img = img.astype(np.uint8)
+        img = img[:, :, ::-1]
+        lbl = lbl.numpy()
+        return img, lbl

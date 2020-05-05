@@ -1,7 +1,8 @@
 model:
   name: test_test
-  path: /nfs/diskstation/projects/mech_search/prob_pose/models/
+  path: models/
   type: fcn
+  ratios: [1,2,3,5,10]
   max_iteration: 50000       # number of epochs to train for
   gpu: 0
   batch_size: 8
@@ -10,10 +11,11 @@ model:
   weight_decay: 0.0005
 
 dataset:
-  path: /nfs/diskstation/projects/mech_search/prob_pose/datasets/soft_single_goal_datasets/box_1_combo_dataset/images/
+  path: /home/mjd3/working/pose/sd-maskrcnn/datasets/ratio_dataset/images
   imgs: 'combo_ims'
-  lbls: 'soft_dist_ims'
-  mean: [193.8, 193.8, 0]
+  lbls: 'dist_ims'
+  mean: [179.8, 179.8, 0]
+  max_ind: 1000
 
 # name of the config file to save (within the dataset folder)
 # note that this will be overwritten between multiple runs so
