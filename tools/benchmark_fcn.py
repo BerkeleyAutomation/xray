@@ -159,7 +159,7 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
     benchmark_loss /= len(data_loader)
     
     t = PrettyTable(['N', 'Loss', 'Acc', 'Bal-Acc', 'IoU'])
-    t.add_row([data_loader.batch_size * len(data_loader)] + [benchmark_loss] + list(metrics))
+    t.add_row([data_loader.batch_size * len(data_loader)] + [np.round(benchmark_loss, 1)] + list(np.round(metrics, 2)))
     res = {k: v if isinstance(v, int) else float(v) for (k,v) in zip(t._field_names, t._rows[0])}
     results = YamlConfig()
     results.update(res)
