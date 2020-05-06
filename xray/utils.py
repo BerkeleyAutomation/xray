@@ -370,11 +370,8 @@ def visualize_segmentation(**kwargs):
         Visualized image.
     """
     img = kwargs.pop('img', None)
-    targ = kwargs.pop('targ', None)
     lbl_true = kwargs.pop('lbl_true', None)
     lbl_pred = kwargs.pop('lbl_pred', None)
-    n_class = kwargs.pop('n_class', None)
-    label_names = kwargs.pop('label_names', None)
     if kwargs:
         raise RuntimeError(
             'Unexpected keys in kwargs: {}'.format(kwargs.keys()))
@@ -387,30 +384,26 @@ def visualize_segmentation(**kwargs):
 
     vizs = []
 
-    if targ is not None:
-        viz_trues = [targ, img]
-        viz_preds = [targ, img]
-    else:
-        viz_trues = [img]
-        viz_preds = [img]
-
     if lbl_true is not None:
-        viz_trues.extend([
+        viz_trues = [
+            img,
             label2rgb(lbl_true),
             label2rgb(lbl_true, img),
-        ])
+        ]
         vizs.append(get_tile_image(viz_trues, (1, len(viz_trues))))
 
     if lbl_pred is not None:
-        viz_preds.extend([
-            label2rgb(lbl_pred),
-            label2rgb(lbl_pred, img),
-        ])
-        vizs.append(get_tile_image(viz_preds, (1, len(viz_preds))))
+        if isinstance(lbl_pred, np.ndarray) and lbl_pred.ndim == 2:
+            lbl_pred = [lbl_pred]
+        for lp in lbl_pred:
+            viz_preds = [
+                img,
+                label2rgb(lp),
+                label2rgb(lp, img),
+            ]
+            vizs.append(get_tile_image(viz_preds, (1, len(viz_preds))))
 
     if len(vizs) == 1:
         return vizs[0]
-    elif len(vizs) == 2:
-        return get_tile_image(vizs, (2, 1))
     else:
-        raise RuntimeError
+        return get_tile_image(vizs, (len(vizs), 1))

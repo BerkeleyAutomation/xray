@@ -92,7 +92,7 @@ class Trainer(object):
                 score = self.model(imgs)
             if isinstance(score, dict):
                 score = score['out']
-            score = score.squeeze()[range(len(imgs)), ratios]
+            score = score[range(len(imgs)), ratios]
 
             loss = torch.nn.MSELoss()(score, lbls)
             loss_data = loss.data.item()

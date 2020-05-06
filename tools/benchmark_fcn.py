@@ -48,8 +48,7 @@ import cv2
 import matplotlib.pyplot as plt
 
 from xray import utils
-from xray import FCNTargetDataset, FCNDataset
-from xray import siamese_fcn, SiameseUNet
+from xray import FCNRatioDataset
 
 try:
     from apex import amp
@@ -104,7 +103,7 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
     model.eval()
 
     if config['vis']:
-        out = osp.join(output_dir, 'visualization_viz')
+        out = osp.join(output_dir, 'viz')
         utils.mkdir_if_missing(out)
 
     benchmark_loss = 0
@@ -113,48 +112,46 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
             enumerate(data_loader), total=len(data_loader),
             desc='Benchmark Progress', ncols=80,
             leave=False):
-        # data[0] = cv2_blur(data[0], kernel_size=11)
+
         data[0] = cv2_clipped_zoom(data[0], 1 / config['scale'])
         if cuda:
             data = [d.cuda() for d in data]
         data = [Variable(d) for d in data]
-        lbl = data[-1]
+        imgs, lbls, ratios = data
         with torch.no_grad():
-            score = model(*data[:-1])
+            score = model(imgs)
         if isinstance(score, dict):
             score = score['out']
-        score = score.squeeze()
         score = cv2_clipped_zoom(score.cpu(), config['scale']).cuda()
         data[0] = cv2_clipped_zoom(data[0].cpu(), config['scale']).cuda()
-        
-        loss = torch.nn.MSELoss()(score, lbl)
+        loss_score = score[range(len(imgs)), ratios]
+
+        loss = torch.nn.MSELoss()(loss_score, lbls)
         loss_data = loss.data.item()
         if np.isnan(loss_data):
             raise ValueError('loss is nan while benchmarking')
-        benchmark_loss += loss_data / len(score)
+        benchmark_loss += loss_data / len(loss_score)
         
         data = [d.data.cpu() for d in data]
-        lbl_pred = score.data.cpu().numpy()
-        for d in zip(*data, lbl_pred):
-            dd = data_loader.dataset.untransform(*d[:-1])
-            label_trues.append(dd[-1])
-            label_preds.append(d[-1])
+        lbl_pred = loss_score.data.cpu().numpy()
+        all_lbls_pred = score.data.cpu().numpy()
+        for img, lbl, pred in zip(data[0], data[1], lbl_pred):
+            img, lbl = data_loader.dataset.untransform(img, lbl)
+            label_trues.append(lbl)
+            label_preds.append(pred)
         
         if config['vis'] and batch_idx % config['vis_interval'] == 0:
             out_file = osp.join(out, 'vis_{{}}_{num:03d}.png'.format(num=int(batch_idx / config['vis_interval'])))
-            if len(dd) > 2:
-                viz = utils.visualize_segmentation(lbl_pred=d[-1], lbl_true=dd[-1], img=dd[0], targ=dd[1])     
+            gt = np.iinfo(np.uint8).max * plt.cm.jet(lbl.astype(np.uint8))
+            all_pred = np.iinfo(np.uint8).max * plt.cm.jet(all_lbls_pred[-1] / all_lbls_pred[-1].max(axis=(1,2), keepdims=True))
+
+            if 'vis_block' not in config.keys() or config['vis_block']:
+                viz = utils.visualize_segmentation(lbl_pred=all_lbls_pred[-1], lbl_true=lbl, img=img)        
             else:
-                gt = np.iinfo(np.uint8).max * plt.cm.jet(dd[-1].astype(np.uint8))
-                pred = d[-1]
-                pred = np.iinfo(np.uint8).max * plt.cm.jet(pred / pred.max())
-                
-                if 'vis_block' not in config.keys() or config['vis_block']:
-                    viz = utils.visualize_segmentation(lbl_pred=d[-1], lbl_true=dd[-1], img=dd[0])        
-                else:
-                    skimage.io.imsave(out_file.format('input'), dd[0])
-                    skimage.io.imsave(out_file.format('gt'), gt.astype(np.uint8))
-                    skimage.io.imsave(out_file.format('pred'), pred.astype(np.uint8))
+                skimage.io.imsave(out_file.format('input'), img)
+                skimage.io.imsave(out_file.format('gt'), gt.astype(np.uint8))
+                for j, ap in enumerate(all_pred):
+                    skimage.io.imsave(out_file.format('pred_{:02d}'.format(config['model']['ratios'][j])), ap.astype(np.uint8))
             if 'vis_block' not in config.keys() or config['vis_block']:
                 skimage.io.imsave(out_file.format('block'), viz)
 
@@ -199,14 +196,9 @@ if __name__ == "__main__":
         torch.backends.cudnn.benchmark = True
 
     # 1. model
-    siamese = ('siamese' in config['model']['type'])
-    unet = ('unet' in config['model']['type'])
-    if siamese and unet:
-        model = SiameseUNet(3, 1)
-    elif siamese:
-        model = siamese_fcn()
-    else:
-        model = fcn_resnet50(num_classes=1)
+    ratios = config['model']['ratios']
+    ratio_map = {k:v for k,v in zip(ratios, range(len(ratios)))}
+    model = fcn_resnet50(num_classes=len(ratios))
     checkpoint = torch.load(osp.join(config['model']['path'], 'model_best.pth.tar'))
     model.load_state_dict(checkpoint['model_state_dict'])
     if cuda:
@@ -215,17 +207,14 @@ if __name__ == "__main__":
     # 2. dataset
     root = config['dataset']['path']
     kwargs = {'num_workers': 4, 'pin_memory': True} if cuda else {}
-    test_set = FCNTargetDataset(root, split='test', imgs=config['dataset']['imgs'], 
-                                           targs=config['dataset']['targs'], lbls=config['dataset']['lbls'], 
-                                           mean=config['dataset']['mean'], transform=True) if siamese  \
-              else FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
-                                          mean=config['dataset']['mean'], transform=True)
+    test_set = FCNRatioDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
+                               mean=config['dataset']['mean'], ratio_map=ratio_map, transform=True)
     data_loader = torch.utils.data.DataLoader(test_set, batch_size=config['model']['batch_size'], shuffle=False, **kwargs)
 
     # If using mixed precision training, initialize here
-    if APEX_AVAILABLE:
+    if APEX_AVAILABLE and False:
         model = amp.initialize(
             model, opt_level="O1")
         amp.load_state_dict(checkpoint['amp'])
 
-    benchmark(output_dir, model, data_loader, config, cuda=cuda, use_amp=APEX_AVAILABLE)
+    benchmark(output_dir, model, data_loader, config, cuda=cuda, use_amp=APEX_AVAILABLE and False)

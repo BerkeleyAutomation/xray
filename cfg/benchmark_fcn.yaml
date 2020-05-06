@@ -1,18 +1,19 @@
-output_dir: /nfs/diskstation/projects/mech_search/prob_pose/benchmark_results/benchmark_combo/ar10_flat_lid
+output_dir: benchmark/test
 save_conf_name: config.yaml
 scale: 1
 
 model:
   type: fcn
-  path: /nfs/diskstation/projects/mech_search/prob_pose/models/box_10_combo_fcn_2_28_1e-5/
-  gpu: 0
+  path: models/test_test
+  ratios: [1,2,3,5,10]
+  gpu: 1
   batch_size: 4
 
 dataset:
-  path: /nfs/diskstation/projects/mech_search/prob_pose/datasets/soft_single_goal_datasets/combo/flat_lid_combo_test/images/
+  path: /home/mjd3/working/pose/sd-maskrcnn/datasets/ratio_dataset/images/
   imgs: 'combo_ims'
-  lbls: 'soft_dist_ims'
-  mean: [181.0, 181.0, 0]
+  lbls: 'dist_ims'
+  mean: [179.8, 179.8, 0]
 
 # Visualization settings
 vis: 1

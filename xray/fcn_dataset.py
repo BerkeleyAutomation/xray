@@ -156,7 +156,7 @@ class FCNRatioDataset(data.Dataset):
         self.files = collections.defaultdict(list)
         inds = np.load(osp.join(root, '{}_indices.npy'.format(split)))
         if max_ind:
-            inds = inds[:max_ind]
+            inds = inds[inds < max_ind]
         for i in inds:
             img_files = glob.glob(osp.join(root, imgs, 'image_{:06d}_*.png'.format(i)))
             lbl_files = glob.glob(osp.join(root, lbls, 'image_{:06d}_*.png'.format(i)))
