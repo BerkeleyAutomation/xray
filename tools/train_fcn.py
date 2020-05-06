@@ -137,7 +137,7 @@ class Trainer(object):
             'arch': self.model.__class__.__name__,
             'optim_state_dict': self.optim.state_dict(),
             'model_state_dict': self.model.state_dict(),
-            'amp': amp.state_dict(),
+            'amp': amp.state_dict() if self.use_amp else {},
             'best_mean_iou': self.best_mean_iou,
         }, osp.join(self.out, 'checkpoint.pth.tar'))
         if is_best:
