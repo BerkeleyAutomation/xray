@@ -1,11 +1,11 @@
 model:
-  name: test_test
+  name: 5_channel_125k
   path: models/
   type: fcn
   ratios: [1,2,3,5,10]
   max_iteration: 50000       # number of epochs to train for
   gpu: 0
-  batch_size: 8
+  batch_size: 16
   lr: 1e-4
   momentum: 0.99
   weight_decay: 0.0005
@@ -15,9 +15,7 @@ dataset:
   imgs: 'combo_ims'
   lbls: 'dist_ims'
   mean: [179.8, 179.8, 0]
-  max_ind: 1000
+  max_ind: 0
 
-# name of the config file to save (within the dataset folder)
-# note that this will be overwritten between multiple runs so
-# you should name this uniquely for each run.
-save_conf_name: test.yaml
+# name of the config file to save (within the model folder)
+save_conf_name: 5_channel_125k.yaml
