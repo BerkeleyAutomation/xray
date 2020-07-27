@@ -18,7 +18,7 @@ from xray import FCNRatioDataset
 
 try:
     from apex import amp
-    APEX_AVAILABLE = True
+    APEX_AVAILABLE = False
 except ModuleNotFoundError:
     APEX_AVAILABLE = False
 

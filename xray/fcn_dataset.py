@@ -158,15 +158,23 @@ class FCNRatioDataset(data.Dataset):
         if max_ind:
             inds = inds[inds < max_ind]
         for i in inds:
-            img_files = glob.glob(osp.join(root, imgs, 'image_{:06d}_*.png'.format(i)))
-            lbl_files = glob.glob(osp.join(root, lbls, 'image_{:06d}_*.png'.format(i)))
-            for img, lbl in zip(img_files, lbl_files):
-                ratio = int(osp.splitext(img)[0].split('_')[-1])
-                self.files[split].append({
-                    'img': img,
-                    'lbl': lbl,
-                    'ratio': ratio if not ratio_map else ratio_map[ratio]
-                })
+            if ratio_map is not None:
+                for r in ratio_map:
+                    self.files[split].append({
+                        'img': osp.join(root, imgs, 'image_{:06d}_{:02d}.png'.format(i, r)),
+                        'lbl': osp.join(root, lbls, 'image_{:06d}_{:02d}.png'.format(i, r)),
+                        'ratio': ratio_map[r]
+                    })
+            else:
+                img_files = glob.glob(osp.join(root, imgs, 'image_{:06d}_*.png'.format(i)))
+                lbl_files = glob.glob(osp.join(root, lbls, 'image_{:06d}_*.png'.format(i)))
+                for img, lbl in zip(img_files, lbl_files):
+                    ratio = int(osp.splitext(img)[0].split('_')[-1])
+                    self.files[split].append({
+                        'img': img,
+                        'lbl': lbl,
+                        'ratio': ratio
+                    })
 
     def __len__(self):
         return len(self.files[self.split])
