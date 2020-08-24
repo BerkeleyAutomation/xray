@@ -47,9 +47,9 @@ from prettytable import PrettyTable
 import cv2
 import matplotlib.pyplot as plt
 
-import sys
-sys.path.insert(0, '/home/qingh097/')
-print(sys.path)
+# import sys
+# sys.path.insert(0, '/home/qingh097/')
+# print(sys.path)
 
 from xray import utils
 from xray import FCNRatioDataset
