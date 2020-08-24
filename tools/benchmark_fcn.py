@@ -47,6 +47,10 @@ from prettytable import PrettyTable
 import cv2
 import matplotlib.pyplot as plt
 
+import sys
+sys.path.insert(0, '/home/qingh097/')
+print(sys.path)
+
 from xray import utils
 from xray import FCNRatioDataset
 
@@ -61,41 +65,76 @@ def cv2_blur(img, kernel_size=5):
     result = cv2.GaussianBlur(result, (kernel_size, kernel_size), 0)
     return torch.from_numpy(result.transpose(2,0,1).reshape(img.shape)).float()
 
+
 def cv2_clipped_zoom(img, zoom_factor):
-    """
-    Center zoom in/out of the given image and returning an enlarged/shrinked view of 
-    the image without changing dimensions
-    Args:
-        img : Image array
-        zoom_factor : amount of zoom as a ratio (0 to Inf)
-    """
-    if zoom_factor == 1:
-        return img
+        """
+        Center zoom in/out of the given image and returning an enlarged/shrinked view of 
+        the image without changing dimensions
+        Args:
+            img : Image array
+            zoom_factor : amount of zoom as a ratio (0 to Inf)
+        """
+        if zoom_factor == 1:
+            return img
+        height, width = img.shape[-2:] # It's also the final desired shape
+        new_height, new_width = int(height * zoom_factor), int(width * zoom_factor)
+        ### Crop only the part that will remain in the result (more efficient)
+        # Centered bbox of the final desired size in resized (larger/smaller) image coordinates
+        y1, x1 = max(0, new_height - height) // 2, max(0, new_width - width) // 2
+        y2, x2 = y1 + height, x1 + width
+        bbox = np.array([y1,x1,y2,x2])
+        # Map back to original image coordinates
+        bbox = (bbox / zoom_factor).astype(np.int)
+        y1, x1, y2, x2 = bbox
+        cropped_img = img.numpy()[..., y1:y2, x1:x2]
+        cropped_img = cropped_img.reshape((-1, cropped_img.shape[-2], cropped_img.shape[-1])).transpose(1,2,0)
+        # Handle padding when downscaling
+        resize_height, resize_width = min(new_height, height), min(new_width, width)
+        pad_height1, pad_width1 = (height - resize_height) // 2, (width - resize_width) //2
+        pad_height2, pad_width2 = (height - resize_height) - pad_height1, (width - resize_width) - pad_width1
+        pad_spec = [(pad_height1, pad_height2), (pad_width1, pad_width2), (0,0)]
+        result = cv2.resize(cropped_img, (resize_width, resize_height))
+        result = np.pad(result, pad_spec[:result.ndim], mode='edge')
+        assert result.shape[0] == height and result.shape[1] == width
+        if result.ndim == 3:
+            result = result.transpose(2,0,1)
+        return torch.from_numpy(result.reshape(img.shape)).float()
 
-    height, width = img.shape[-2:] # It's also the final desired shape
-    new_height, new_width = int(height * zoom_factor), int(width * zoom_factor)
+# def cv2_clipped_zoom(img, zoom_factor):
+#     """
+#     Center zoom in/out of the given image and returning an enlarged/shrinked view of 
+#     the image without changing dimensions
+#     Args:
+#         img : Image array
+#         zoom_factor : amount of zoom as a ratio (0 to Inf)
+#     """
+#     if zoom_factor == 1:
+#         return img
 
-    ### Crop only the part that will remain in the result (more efficient)
-    # Centered bbox of the final desired size in resized (larger/smaller) image coordinates
-    y1, x1 = max(0, new_height - height) // 2, max(0, new_width - width) // 2
-    y2, x2 = y1 + height, x1 + width
-    bbox = np.array([y1,x1,y2,x2])
-    # Map back to original image coordinates
-    bbox = (bbox / zoom_factor).astype(np.int)
-    y1, x1, y2, x2 = bbox
-    cropped_img = img.numpy()[..., y1:y2, x1:x2]
-    cropped_img = cropped_img.reshape((-1, *cropped_img.shape[-2:])).transpose(1,2,0)
+#     height, width = img.shape[-2:] # It's also the final desired shape
+#     new_height, new_width = int(height * zoom_factor), int(width * zoom_factor)
 
-    # Handle padding when downscaling
-    resize_height, resize_width = min(new_height, height), min(new_width, width)
-    pad_height1, pad_width1 = (height - resize_height) // 2, (width - resize_width) //2
-    pad_height2, pad_width2 = (height - resize_height) - pad_height1, (width - resize_width) - pad_width1
-    pad_spec = [(pad_height1, pad_height2), (pad_width1, pad_width2), (0,0)]
+#     ### Crop only the part that will remain in the result (more efficient)
+#     # Centered bbox of the final desired size in resized (larger/smaller) image coordinates
+#     y1, x1 = max(0, new_height - height) // 2, max(0, new_width - width) // 2
+#     y2, x2 = y1 + height, x1 + width
+#     bbox = np.array([y1,x1,y2,x2])
+#     # Map back to original image coordinates
+#     bbox = (bbox / zoom_factor).astype(np.int)
+#     y1, x1, y2, x2 = bbox
+#     cropped_img = img.numpy()[..., y1:y2, x1:x2]
+#     cropped_img = cropped_img.reshape((-1, *cropped_img.shape[-2:])).transpose(1,2,0)
 
-    result = cv2.resize(cropped_img, (resize_width, resize_height))
-    result = np.pad(result, pad_spec, mode='edge')
-    assert result.shape[0] == height and result.shape[1] == width
-    return torch.from_numpy(result.transpose(2,0,1).reshape(img.shape)).float()
+#     # Handle padding when downscaling
+#     resize_height, resize_width = min(new_height, height), min(new_width, width)
+#     pad_height1, pad_width1 = (height - resize_height) // 2, (width - resize_width) //2
+#     pad_height2, pad_width2 = (height - resize_height) - pad_height1, (width - resize_width) - pad_width1
+#     pad_spec = [(pad_height1, pad_height2), (pad_width1, pad_width2), (0,0)]
+
+#     result = cv2.resize(cropped_img, (resize_width, resize_height))
+#     result = np.pad(result, pad_spec, mode='edge')
+#     assert result.shape[0] == height and result.shape[1] == width
+#     return torch.from_numpy(result.transpose(2,0,1).reshape(img.shape)).float()
 
 def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False):
     """Benchmarks a model."""
@@ -112,19 +151,35 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
             enumerate(data_loader), total=len(data_loader),
             desc='Benchmark Progress', ncols=80,
             leave=False):
-
+        # print("data[0]:",data[0].shape)
         data[0] = cv2_clipped_zoom(data[0], 1 / config['scale'])
         if cuda:
             data = [d.cuda() for d in data]
         data = [Variable(d) for d in data]
         imgs, lbls, ratios = data
+
+        # print("imgs:",type(imgs),imgs.shape)
         with torch.no_grad():
             score = model(imgs)
         if isinstance(score, dict):
             score = score['out']
-        score = cv2_clipped_zoom(score.cpu(), config['scale']).cuda()
+
+        # if self.cuda:            
+        #     prob_input_im = prob_input_im.cuda()        
+        #     with torch.no_grad():            
+        #         prob_pred = self.prob_model(prob_input_im)        
+        #         prob_pred = prob_pred['out'].squeeze()        
+        #         prob_pred = self._cv2_clipped_zoom(prob_pred.cpu()[None,...],                                            
+        #             self.scale).squeeze().numpy()
+
+        # print("score:",score.shape)
+        score = cv2_clipped_zoom(score.squeeze().cpu()[None,...], config['scale']).cuda().unsqueeze(0)
+        # score = cv2_clipped_zoom(score.cpu(), config['scale']).cuda()
         data[0] = cv2_clipped_zoom(data[0].cpu(), config['scale']).cuda()
         loss_score = score[range(len(imgs)), ratios]
+
+        # print("score:",score.shape)
+        # exit()
 
         loss = torch.nn.MSELoss()(loss_score, lbls)
         loss_data = loss.data.item()
@@ -135,6 +190,10 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
         data = [d.data.cpu() for d in data]
         lbl_pred = loss_score.data.cpu().numpy()
         all_lbls_pred = score.data.cpu().numpy()
+
+        # print("lbl_pred:",lbl_pred,lbl_pred.shape)
+        # print("all_lbls_pred:",all_lbls_pred,all_lbls_pred.shape)
+
         for img, lbl, pred in zip(data[0], data[1], lbl_pred):
             img, lbl = data_loader.dataset.untransform(img, lbl)
             label_trues.append(lbl)
@@ -144,6 +203,8 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
             out_file = osp.join(out, 'vis_{{}}_{num:03d}.png'.format(num=int(batch_idx / config['vis_interval'])))
             gt = np.iinfo(np.uint8).max * plt.cm.jet(lbl.astype(np.uint8))
             all_pred = np.iinfo(np.uint8).max * plt.cm.jet(all_lbls_pred[-1] / all_lbls_pred[-1].max(axis=(1,2), keepdims=True))
+
+            # print("all_pred:",all_pred,all_pred.shape)
 
             if 'vis_block' not in config.keys() or config['vis_block']:
                 viz = utils.visualize_segmentation(lbl_pred=all_lbls_pred[-1], lbl_true=lbl, img=img)        
@@ -212,9 +273,9 @@ if __name__ == "__main__":
     data_loader = torch.utils.data.DataLoader(test_set, batch_size=config['model']['batch_size'], shuffle=False, **kwargs)
 
     # If using mixed precision training, initialize here
-    if APEX_AVAILABLE and False:
+    if APEX_AVAILABLE:
         model = amp.initialize(
             model, opt_level="O1")
         amp.load_state_dict(checkpoint['amp'])
 
-    benchmark(output_dir, model, data_loader, config, cuda=cuda, use_amp=APEX_AVAILABLE and False)
+    benchmark(output_dir, model, data_loader, config, cuda=cuda, use_amp=APEX_AVAILABLE)
