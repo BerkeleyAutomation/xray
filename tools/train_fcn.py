@@ -13,12 +13,17 @@ from torchvision.models.segmentation import fcn_resnet50
 from autolab_core import YamlConfig
 from autolab_core.utils import keyboard_input
 
+import sys
+#sys.path.insert(0, '/home/qingh097/')
+print(sys.path)
+
 from xray import utils
 from xray import FCNRatioDataset
 
+# APEX_AVAILABLE = False
 try:
     from apex import amp
-    APEX_AVAILABLE = False
+    APEX_AVAILABLE = True
 except ModuleNotFoundError:
     APEX_AVAILABLE = False
 
@@ -109,7 +114,7 @@ class Trainer(object):
                 if len(visualizations) < 9:
                     viz = utils.visualize_segmentation(lbl_pred=pred, lbl_true=lbl, img=img)
                     visualizations.append(viz)
-        
+
         metrics = utils.label_accuracy_score(label_trues, label_preds)
 
         out = osp.join(self.out, 'visualization_viz')
@@ -169,12 +174,13 @@ class Trainer(object):
                 data = [d.cuda() for d in data]
             data = [Variable(d) for d in data]
             imgs, lbls, ratios = data
-            
+
             self.optim.zero_grad()
             score = self.model(imgs)
             if isinstance(score, dict):
                 score = score['out']
-            score = score.squeeze()[range(len(imgs)), ratios]
+            # score = score.squeeze()[range(len(imgs)), ratios]
+            score = score[range(len(imgs)), ratios]
 
             loss = torch.nn.MSELoss()(score, lbls)
             loss_data = loss.data.item()
@@ -205,7 +211,7 @@ class Trainer(object):
             if self.iteration >= self.max_iter:
                 break
 
-    
+
     def train(self):
         max_epoch = int(math.ceil(1. * self.max_iter / len(self.train_loader)))
         for epoch in tqdm.trange(self.epoch, max_epoch,
@@ -246,6 +252,10 @@ if __name__ == "__main__":
         torch.cuda.manual_seed(1337)
         torch.backends.cudnn.benchmark = True
 
+    print('GPU is_available:',cuda)
+    print('Current GPU device:',torch.cuda.current_device())
+    print('GPU device name:',torch.cuda.get_device_name(0))
+
     # 1. model
     ratios = config['model']['ratios']
     ratio_map = {k:v for k,v in zip(ratios, range(len(ratios)))}
@@ -264,15 +274,16 @@ if __name__ == "__main__":
     # 2. dataset
     root = config['dataset']['path']
     kwargs = {'num_workers': 4, 'pin_memory': True} if cuda else {}
-    train_set = FCNRatioDataset(root, split='train', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
+    train_set = FCNRatioDataset(root, split='train', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'],
                                 mean=config['dataset']['mean'], max_ind=config['dataset']['max_ind'], ratio_map=ratio_map,
                                 transform=True)
-    val_set = FCNRatioDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
+    val_set = FCNRatioDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'],
                               mean=config['dataset']['mean'], max_ind=config['dataset']['max_ind'], ratio_map=ratio_map,
                               transform=True)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
     val_loader = torch.utils.data.DataLoader(val_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
 
+    print("finish loading dataset")
     # 3. optimizer
     optim = torch.optim.SGD(
         model.parameters(),
@@ -283,12 +294,13 @@ if __name__ == "__main__":
         optim.load_state_dict(checkpoint['optim_state_dict'])
 
     # If using mixed precision training, initialize here
-    if APEX_AVAILABLE and False:
+    # if APEX_AVAILABLE and False:
+    if APEX_AVAILABLE:
         model, optim = amp.initialize(
-            model, optim, opt_level="O1", 
+            model, optim, opt_level="O1",
             loss_scale="dynamic"
         )
-        if resume:  
+        if resume:
             amp.load_state_dict(checkpoint['amp'])
 
     trainer = Trainer(
@@ -299,8 +311,10 @@ if __name__ == "__main__":
         val_loader=val_loader,
         out=out,
         max_iter=config['model']['max_iteration'],
-        use_amp=APEX_AVAILABLE and False
+        use_amp=APEX_AVAILABLE
     )
     trainer.epoch = start_epoch
     trainer.iteration = start_iteration
+
+    print('start training')
     trainer.train()

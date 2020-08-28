@@ -1,3 +1,4 @@
+import os
 import collections
 import os.path as osp
 import glob
@@ -161,8 +162,10 @@ class FCNRatioDataset(data.Dataset):
             if ratio_map is not None:
                 for r in ratio_map:
                     self.files[split].append({
-                        'img': osp.join(root, imgs, 'image_{:06d}_{:02d}.png'.format(i, r)),
-                        'lbl': osp.join(root, lbls, 'image_{:06d}_{:02d}.png'.format(i, r)),
+                        # 'img': osp.join(root, imgs, 'image_{:06d}_{:02d}.png'.format(i, r)),
+                        # 'lbl': osp.join(root, lbls, 'image_{:06d}_{:02d}.png'.format(i, r)),
+                        'img': osp.join(root, imgs, 'image_{:06d}.png'.format(i)),
+                        'lbl': osp.join(root, lbls, 'image_{:06d}.png'.format(i)),
                         'ratio': ratio_map[r]
                     })
             else:
@@ -175,6 +178,42 @@ class FCNRatioDataset(data.Dataset):
                         'lbl': lbl,
                         'ratio': ratio
                     })
+
+    # def __init__(self, root, split='train', 
+    #              imgs='combo_ims', lbls='dist_ims', 
+    #              mean=None, ratio_map=None,
+    #              transform=False, max_ind=0):
+    #     self.root = root
+    #     self.split = split
+    #     if mean is not None:
+    #         self.mean_bgr = np.array(mean)
+    #     self._transform = transform
+
+    #     self.files = collections.defaultdict(list)
+    #     # inds = np.load(osp.join(root, '{}_indices.npy'.format(split)))
+    #     inds = set([f_name[:-4] for f_name in os.listdir(root+'/'+imgs+'/') if os.path.isfile(os.path.join(root+'/'+imgs+'/', f_name))])
+    #     if max_ind:
+    #         inds = inds[inds < max_ind]
+    #     for i in inds:
+    #         # print(i)
+    #         # exit()
+    #         if ratio_map is not None:
+    #             for r in ratio_map:
+    #                 self.files[split].append({
+    #                     'img': osp.join(root, imgs, i+'.png'),
+    #                     'lbl': osp.join(root, lbls, i+'.png'),
+    #                     'ratio': ratio_map[r]
+    #                 })
+    #         else:
+    #             img_files = glob.glob(osp.join(root, imgs, 'image_{:06d}_*.png'.format(i)))
+    #             lbl_files = glob.glob(osp.join(root, lbls, 'image_{:06d}_*.png'.format(i)))
+    #             for img, lbl in zip(img_files, lbl_files):
+    #                 ratio = int(osp.splitext(img)[0].split('_')[-1])
+    #                 self.files[split].append({
+    #                     'img': img,
+    #                     'lbl': lbl,
+    #                     'ratio': ratio
+    #                 })
 
     def __len__(self):
         return len(self.files[self.split])

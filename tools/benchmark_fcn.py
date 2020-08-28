@@ -47,6 +47,10 @@ from prettytable import PrettyTable
 import cv2
 import matplotlib.pyplot as plt
 
+import sys
+sys.path.insert(0, '/home/qingh097/')
+print(sys.path)
+
 from xray import utils
 from xray import FCNRatioDataset
 
@@ -112,19 +116,25 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
             enumerate(data_loader), total=len(data_loader),
             desc='Benchmark Progress', ncols=80,
             leave=False):
-
+        # print("data[0]:",data[0].shape)
         data[0] = cv2_clipped_zoom(data[0], 1 / config['scale'])
         if cuda:
             data = [d.cuda() for d in data]
         data = [Variable(d) for d in data]
         imgs, lbls, ratios = data
+
+        # print("imgs:",type(imgs),imgs.shape)
         with torch.no_grad():
             score = model(imgs)
         if isinstance(score, dict):
             score = score['out']
+
+        # print("score:",score.shape)
         score = cv2_clipped_zoom(score.cpu(), config['scale']).cuda()
         data[0] = cv2_clipped_zoom(data[0].cpu(), config['scale']).cuda()
         loss_score = score[range(len(imgs)), ratios]
+
+        # exit()
 
         loss = torch.nn.MSELoss()(loss_score, lbls)
         loss_data = loss.data.item()
@@ -135,6 +145,10 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
         data = [d.data.cpu() for d in data]
         lbl_pred = loss_score.data.cpu().numpy()
         all_lbls_pred = score.data.cpu().numpy()
+
+        # print("lbl_pred:",lbl_pred,lbl_pred.shape)
+        # print("all_lbls_pred:",all_lbls_pred,all_lbls_pred.shape)
+
         for img, lbl, pred in zip(data[0], data[1], lbl_pred):
             img, lbl = data_loader.dataset.untransform(img, lbl)
             label_trues.append(lbl)
@@ -145,6 +159,8 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
             gt = np.iinfo(np.uint8).max * plt.cm.jet(lbl.astype(np.uint8))
             all_pred = np.iinfo(np.uint8).max * plt.cm.jet(all_lbls_pred[-1] / all_lbls_pred[-1].max(axis=(1,2), keepdims=True))
 
+            # print("all_pred:",all_pred,all_pred.shape)
+            
             if 'vis_block' not in config.keys() or config['vis_block']:
                 viz = utils.visualize_segmentation(lbl_pred=all_lbls_pred[-1], lbl_true=lbl, img=img)        
             else:
@@ -212,9 +228,9 @@ if __name__ == "__main__":
     data_loader = torch.utils.data.DataLoader(test_set, batch_size=config['model']['batch_size'], shuffle=False, **kwargs)
 
     # If using mixed precision training, initialize here
-    if APEX_AVAILABLE and False:
+    if APEX_AVAILABLE:
         model = amp.initialize(
             model, opt_level="O1")
         amp.load_state_dict(checkpoint['amp'])
 
-    benchmark(output_dir, model, data_loader, config, cuda=cuda, use_amp=APEX_AVAILABLE and False)
+    benchmark(output_dir, model, data_loader, config, cuda=cuda, use_amp=APEX_AVAILABLE)
