@@ -23,7 +23,7 @@
 # save_conf_name: test.yaml
 
 model:
-  name: 1_channel_8-27
+  name: 1_channel_sem_8-29
   path: models/
   type: fcn
   # ratios: [1,2,3,5,10]

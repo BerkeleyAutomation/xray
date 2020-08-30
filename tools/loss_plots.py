@@ -7,7 +7,11 @@ import argparse
 import seaborn as sns
 sns.set()
 
-from xray import utils
+# import sys
+# sys.path.insert(0, '/home/qingh097/')
+# print(sys.path)
+
+# from xray import utils
 
 if __name__ == '__main__':
 

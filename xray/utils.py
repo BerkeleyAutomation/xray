@@ -207,17 +207,17 @@ def label_accuracy_score(label_trues, label_preds, pos_thresh=25.5, diff_thresh=
     # lt = np.array(label_trues) > 0
     lp = np.array(label_preds)
     lt = np.array(label_trues)
-    
+
     # true_pos = np.sum(np.logical_and(lt, lp))
     # true_neg = np.sum(np.logical_and(~lt, ~lp))
     true_pos = np.sum(np.logical_and(np.abs(lp - lt) < diff_thresh, lt > pos_thresh))
     true_neg = np.sum(np.logical_and(np.abs(lp - lt) < diff_thresh, lt <= pos_thresh))
     num_pos = np.sum(lt > pos_thresh)
-    
+
     acc = (true_pos + true_neg) / lt.size
     bal_acc = 0.5 * ((true_pos / num_pos) + (true_neg / (lt.size - num_pos)))
     iou = true_pos / np.sum(np.logical_or(lt > pos_thresh, lp > pos_thresh))
-    
+
     return acc, bal_acc, iou
 
 
@@ -335,8 +335,16 @@ def get_tile_image(imgs, tile_shape=None, result_img=None, margin_color=None):
 def label2rgb(lbl, img=None, alpha=0.5, thresh_suppress=0):
 
     cmap = cm.jet
-    lbl_viz = cmap(lbl / lbl.max())[...,:-1]
-    lbl_viz = np.iinfo(np.uint8).max * lbl_viz
+    #lbl_viz = cmap(lbl / lbl.max())[...,:-1]
+    #lbl_viz = np.iinfo(np.uint8).max * lbl_viz
+
+    #print('type(lbl_viz)', type(lbl_viz))
+    #print('lbl_viz.dtype', lbl_viz.dtype
+
+    #print('max val label2rgb:', lbl.max()) # it's about 255-368
+
+    # don't normalize output
+    lbl_viz = np.iinfo(np.uint8).max * cmap(lbl / 255.0)[...,:-1]
 
     if img is not None:
         img_gray = skimage.color.rgb2gray(img)

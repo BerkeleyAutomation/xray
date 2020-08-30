@@ -1,10 +1,10 @@
-output_dir: ./benchmark/1_channel_8-27
+output_dir: ./benchmark/1_channel_sem_8-29
 save_conf_name: config.yaml
 scale: 1
 
 model:
   type: fcn
-  path: models/1_channel_8-27
+  path: models/1_channel_sem_8-29
   ratios: [1]
   gpu: 0
   batch_size: 1
