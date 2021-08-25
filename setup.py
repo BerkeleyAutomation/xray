@@ -2,6 +2,9 @@
 Setup of codebase
 Author: Michael Danielczuk
 """
+import os
+import sys 
+
 from setuptools import setup
 
 requirements = [
@@ -10,10 +13,19 @@ requirements = [
     'tqdm',
     'scikit-image',
     'autolab_core',
-    'apex'
 ]
 
-exec(open('xray/version.py').read())
+if "--list-reqs" in sys.argv:
+    print("\n".join(requirements))
+    exit()
+
+# load __version__ without importing anything
+version_file = os.path.join(
+    os.path.dirname(__file__), "xray/version.py"
+)
+with open(version_file, "r") as f:
+    # use eval to get a clean string of version from file
+    __version__ = eval(f.read().strip().split("=")[-1])
 
 setup(
     name='xray',
@@ -28,8 +40,10 @@ setup(
     classifiers = [
         'License :: OSI Approved :: MIT Software License',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
         'Natural Language :: English',
         'Topic :: Scientific/Engineering'
     ],

@@ -11,15 +11,12 @@ import os
 import math
 import random
 import numpy as np
-import tensorflow as tf
 import scipy.ndimage
 from matplotlib.pyplot import cm
 import skimage
 import skimage.transform
 import copy
 import six
-import urllib.request
-import shutil
 import warnings
 from distutils.version import LooseVersion
 

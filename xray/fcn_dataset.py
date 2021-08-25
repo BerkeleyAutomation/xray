@@ -23,19 +23,19 @@ class FCNDataset(data.Dataset):
         if mean is not None:
             self.mean_bgr = np.array(mean)
         self._transform = transform
-        self._soft = ('soft' in lbls)
 
         self.files = collections.defaultdict(list)
         inds = np.load(osp.join(root, '{}_indices.npy'.format(split)))
         if max_ind:
-            inds = inds[:max_ind]
+            inds = inds[inds < max_ind]
         for i in inds:
             img_file = osp.join(root, imgs, 'image_{:06d}.png'.format(i))
             lbl_file = osp.join(root, lbls, 'image_{:06d}.png'.format(i))
-            self.files[split].append({
-                'img': img_file,
-                'lbl': lbl_file,
-            })
+            if osp.exists(img_file) and osp.exists(lbl_file):
+                self.files[split].append({
+                    'img': img_file,
+                    'lbl': lbl_file,
+                })
         
 
     def __len__(self):

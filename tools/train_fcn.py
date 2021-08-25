@@ -2,8 +2,10 @@ import datetime
 import math
 import os
 import os.path as osp
+import sys
 import shutil
 import argparse
+from xray.fcn_dataset import FCNDataset
 import numpy as np
 import skimage.io
 import torch
@@ -16,18 +18,12 @@ from autolab_core.utils import keyboard_input
 from xray import utils
 from xray import FCNRatioDataset
 
-try:
-    from apex import amp
-    APEX_AVAILABLE = False
-except ModuleNotFoundError:
-    APEX_AVAILABLE = False
 
 class Trainer(object):
 
     def __init__(self, cuda, model, optimizer,
                  train_loader, val_loader, out, max_iter,
-                 reduction='mean', interval_validate=None,
-                 use_amp=False):
+                 reduction='mean', interval_validate=None):
         self.cuda = cuda
 
         self.model = model
@@ -38,7 +34,6 @@ class Trainer(object):
 
         self.timestamp_start = datetime.datetime.now()
         self.reduction = reduction
-        self.use_amp = use_amp
 
         if interval_validate is None:
             self.interval_validate = len(self.train_loader)
@@ -78,7 +73,7 @@ class Trainer(object):
         val_loss = 0
         visualizations = []
         label_trues, label_preds = [], []
-        for batch_idx, data in tqdm.tqdm(
+        for _, data in tqdm.tqdm(
                 enumerate(self.val_loader), total=len(self.val_loader),
                 desc='Valid iteration=%d' % self.iteration, ncols=80,
                 leave=False):
@@ -86,13 +81,19 @@ class Trainer(object):
             if self.cuda:
                 data = [d.cuda() for d in data]
             data = [Variable(d) for d in data]
-            imgs, lbls, ratios = data
-
+            if len(data) == 2:
+                imgs, lbls = data
+                ratios = None
+            else:
+                imgs, lbls, ratios = data
             with torch.no_grad():
                 score = self.model(imgs)
             if isinstance(score, dict):
                 score = score['out']
-            score = score[range(len(imgs)), ratios]
+            if ratios is not None:
+                score = score.squeeze()[range(len(imgs)), ratios]
+            else:
+                score = score.squeeze()
 
             loss = torch.nn.MSELoss()(score, lbls)
             loss_data = loss.data.item()
@@ -137,7 +138,6 @@ class Trainer(object):
             'arch': self.model.__class__.__name__,
             'optim_state_dict': self.optim.state_dict(),
             'model_state_dict': self.model.state_dict(),
-            'amp': amp.state_dict() if self.use_amp else {},
             'best_mean_iou': self.best_mean_iou,
         }, osp.join(self.out, 'checkpoint.pth.tar'))
         if is_best:
@@ -168,24 +168,27 @@ class Trainer(object):
             if self.cuda:
                 data = [d.cuda() for d in data]
             data = [Variable(d) for d in data]
-            imgs, lbls, ratios = data
+            if len(data) == 2:
+                imgs, lbls = data
+                ratios = None
+            else:
+                imgs, lbls, ratios = data
             
             self.optim.zero_grad()
             score = self.model(imgs)
             if isinstance(score, dict):
                 score = score['out']
-            score = score.squeeze()[range(len(imgs)), ratios]
+            if ratios is not None:
+                score = score.squeeze()[range(len(imgs)), ratios]
+            else:
+                score = score.squeeze()
 
             loss = torch.nn.MSELoss()(score, lbls)
             loss_data = loss.data.item()
             if np.isnan(loss_data):
                 raise ValueError('loss is nan while training')
 
-            if self.use_amp:
-                with amp.scale_loss(loss, self.optim) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
+            loss.backward()
             self.optim.step()
             loss_data /= len(score)
             train_bar.set_postfix_str('Loss: {:.3f}'.format(loss_data))
@@ -228,10 +231,14 @@ if __name__ == "__main__":
     resume = conf_args.resume
 
     out = osp.join(config['model']['path'], config['model']['name'])
+    interactive = bool(hasattr(sys, 'ps1'))
     if osp.exists(out) and not resume:
+        if not interactive:
+            print(f'A model folder already exists at {out}. Quitting...')
+            sys.exit()
         response = keyboard_input('A model folder already exists at {}. Would you like to overwrite?'.format(out), yesno=True)
         if response.lower() == 'n':
-            os.exit()
+            sys.exit()
     elif osp.exists(out) and resume:
         resume = resume and osp.exists(osp.join(out, 'checkpoint.pth.tar'))
     else:
@@ -247,9 +254,10 @@ if __name__ == "__main__":
         torch.backends.cudnn.benchmark = True
 
     # 1. model
-    ratios = config['model']['ratios']
-    ratio_map = {k:v for k,v in zip(ratios, range(len(ratios)))}
-    model = fcn_resnet50(num_classes=len(ratios))
+    ratios = config["model"]["ratios"]
+    if ratios is not None:
+        ratio_map = {k:v for k,v in zip(ratios, range(len(ratios)))}
+    model = fcn_resnet50(num_classes=len(ratios) if ratios is not None else 1)
     start_epoch = 0
     start_iteration = 0
     if resume:
@@ -263,13 +271,21 @@ if __name__ == "__main__":
 
     # 2. dataset
     root = config['dataset']['path']
-    kwargs = {'num_workers': 4, 'pin_memory': True} if cuda else {}
-    train_set = FCNRatioDataset(root, split='train', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
+    kwargs = {'num_workers': 4, 'pin_memory': False} if cuda else {}
+    if ratios is not None:
+        train_set = FCNRatioDataset(root, split='train', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
+                                    mean=config['dataset']['mean'], max_ind=config['dataset']['max_ind'], ratio_map=ratio_map,
+                                    transform=True)
+        val_set = FCNRatioDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
                                 mean=config['dataset']['mean'], max_ind=config['dataset']['max_ind'], ratio_map=ratio_map,
                                 transform=True)
-    val_set = FCNRatioDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
-                              mean=config['dataset']['mean'], max_ind=config['dataset']['max_ind'], ratio_map=ratio_map,
-                              transform=True)
+    else:
+        train_set = FCNDataset(root, split='train', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
+                                    mean=config['dataset']['mean'], max_ind=config['dataset']['max_ind'],
+                                    transform=True)
+        val_set = FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
+                                mean=config['dataset']['mean'], max_ind=config['dataset']['max_ind'],
+                                transform=True)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
     val_loader = torch.utils.data.DataLoader(val_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
 
@@ -282,15 +298,6 @@ if __name__ == "__main__":
     if resume:
         optim.load_state_dict(checkpoint['optim_state_dict'])
 
-    # If using mixed precision training, initialize here
-    if APEX_AVAILABLE and False:
-        model, optim = amp.initialize(
-            model, optim, opt_level="O1", 
-            loss_scale="dynamic"
-        )
-        if resume:  
-            amp.load_state_dict(checkpoint['amp'])
-
     trainer = Trainer(
         cuda=cuda,
         model=model,
@@ -299,7 +306,6 @@ if __name__ == "__main__":
         val_loader=val_loader,
         out=out,
         max_iter=config['model']['max_iteration'],
-        use_amp=APEX_AVAILABLE and False
     )
     trainer.epoch = start_epoch
     trainer.iteration = start_iteration

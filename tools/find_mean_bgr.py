@@ -11,7 +11,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     means = []
+    inds = np.load(os.path.join(args.directory, "..", "train_indices.npy"))
     for f in tqdm.tqdm(os.listdir(args.directory)):
-        means.append(imread(os.path.join(args.directory, f)).mean(axis=(0,1)))
+        fn = os.path.join(args.directory, f)
+        if int(os.path.splitext(fn)[0].split("_")[-1]) in inds:
+            means.append(imread(fn).mean(axis=(0,1)))
 
     print(np.mean(means, axis=0))
