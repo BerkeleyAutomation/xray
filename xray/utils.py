@@ -193,27 +193,26 @@ def resize(image, output_shape, order=1, mode='constant', cval=0, clip=True,
 # -----------------------------------------------------------------------------
 # Evaluation
 # -----------------------------------------------------------------------------
-def label_accuracy_score(label_trues, label_preds, pos_thresh=25.5, diff_thresh=51):
+def label_accuracy_values(label_trues, label_preds, pos_thresh=25.5, diff_thresh=51):
     """Returns accuracy score evaluation result.
 
       - mean accuracy
       - mean IoU
       - balanced accuracy
     """
-    # lp = np.array(label_preds) >= threshold
-    # lt = np.array(label_trues) > 0
     lp = np.array(label_preds)
     lt = np.array(label_trues)
     
-    # true_pos = np.sum(np.logical_and(lt, lp))
-    # true_neg = np.sum(np.logical_and(~lt, ~lp))
     true_pos = np.sum(np.logical_and(np.abs(lp - lt) < diff_thresh, lt > pos_thresh))
     true_neg = np.sum(np.logical_and(np.abs(lp - lt) < diff_thresh, lt <= pos_thresh))
-    num_pos = np.sum(lt > pos_thresh)
-    
-    acc = (true_pos + true_neg) / lt.size
-    bal_acc = 0.5 * ((true_pos / num_pos) + (true_neg / (lt.size - num_pos)))
-    iou = true_pos / np.sum(np.logical_or(lt > pos_thresh, lp > pos_thresh))
+    num_pred_pos = np.sum(lt > pos_thresh)
+    num_total_pos = np.sum(np.logical_or(lt > pos_thresh, lp > pos_thresh))
+    return true_pos, true_neg, num_pred_pos, num_total_pos, lt.size
+
+def label_accuracy_scores(true_pos, true_neg, num_pred_pos, num_total_pos, total_size):
+    acc = (true_pos + true_neg) / total_size
+    bal_acc = 0.5 * ((true_pos / num_pred_pos) + (true_neg / (total_size - num_pred_pos)))
+    iou = true_pos / num_total_pos
     
     return acc, bal_acc, iou
 

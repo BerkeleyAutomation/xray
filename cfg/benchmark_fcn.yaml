@@ -4,16 +4,18 @@ scale: 1
 
 model:
   type: fcn
-  path: models/test_test
-  ratios: [1,2,3,5,10]
+  path: models/test
+  # ratios: [1,2,3,5,10]
+  ratios: null
   gpu: 1
-  batch_size: 4
+  batch_size: 16
 
 dataset:
-  path: /home/mjd3/working/pose/sd-maskrcnn/datasets/ratio_dataset/images/
-  imgs: 'combo_ims'
-  lbls: 'dist_ims'
-  mean: [179.8, 179.8, 0]
+  path: /home/mjd3/working/laxray/laxray-sim/datasets/dist_dataset
+  imgs: 'depth'
+  lbls: 'dist'
+  mean: [101.46017946, 101.46017946, 101.46017946]
+  max_ind: 0
 
 # Visualization settings
 vis: 1

@@ -49,12 +49,7 @@ import matplotlib.pyplot as plt
 
 from xray import utils
 from xray import FCNRatioDataset
-
-try:
-    from apex import amp
-    APEX_AVAILABLE = True
-except ModuleNotFoundError:
-    APEX_AVAILABLE = False
+from xray.fcn_dataset import FCNDataset
 
 def cv2_blur(img, kernel_size=5):
     result = img.numpy().reshape((-1, *img.shape[-2:])).transpose(1,2,0)
@@ -97,7 +92,7 @@ def cv2_clipped_zoom(img, zoom_factor):
     assert result.shape[0] == height and result.shape[1] == width
     return torch.from_numpy(result.transpose(2,0,1).reshape(img.shape)).float()
 
-def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False):
+def benchmark(output_dir, model, data_loader, config, cuda=False):
     """Benchmarks a model."""
 
     model.eval()
@@ -107,24 +102,33 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
         utils.mkdir_if_missing(out)
 
     benchmark_loss = 0
-    label_trues, label_preds = [], []
+    batch_metrics = []
     for batch_idx, data in tqdm.tqdm(
             enumerate(data_loader), total=len(data_loader),
             desc='Benchmark Progress', ncols=80,
             leave=False):
 
+        label_trues, label_preds = [], []
         data[0] = cv2_clipped_zoom(data[0], 1 / config['scale'])
         if cuda:
             data = [d.cuda() for d in data]
         data = [Variable(d) for d in data]
-        imgs, lbls, ratios = data
+        if len(data) == 2:
+            imgs, lbls = data
+            ratios = None
+        else:
+            imgs, lbls, ratios = data
         with torch.no_grad():
             score = model(imgs)
         if isinstance(score, dict):
             score = score['out']
         score = cv2_clipped_zoom(score.cpu(), config['scale']).cuda()
         data[0] = cv2_clipped_zoom(data[0].cpu(), config['scale']).cuda()
-        loss_score = score[range(len(imgs)), ratios]
+        
+        if ratios is not None:
+            loss_score = score.squeeze()[range(len(imgs)), ratios]
+        else:
+            loss_score = score.squeeze()
 
         loss = torch.nn.MSELoss()(loss_score, lbls)
         loss_data = loss.data.item()
@@ -139,6 +143,7 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
             img, lbl = data_loader.dataset.untransform(img, lbl)
             label_trues.append(lbl)
             label_preds.append(pred)
+        batch_metrics.append(utils.label_accuracy_values(label_trues, label_preds))
         
         if config['vis'] and batch_idx % config['vis_interval'] == 0:
             out_file = osp.join(out, 'vis_{{}}_{num:03d}.png'.format(num=int(batch_idx / config['vis_interval'])))
@@ -155,7 +160,7 @@ def benchmark(output_dir, model, data_loader, config, cuda=False, use_amp=False)
             if 'vis_block' not in config.keys() or config['vis_block']:
                 skimage.io.imsave(out_file.format('block'), viz)
 
-    metrics = utils.label_accuracy_score(label_trues, label_preds)
+    metrics = utils.label_accuracy_scores(*np.array(batch_metrics).sum(axis=0))
     benchmark_loss /= len(data_loader)
     
     t = PrettyTable(['N', 'Loss', 'Acc', 'Bal-Acc', 'IoU'])
@@ -196,9 +201,10 @@ if __name__ == "__main__":
         torch.backends.cudnn.benchmark = True
 
     # 1. model
-    ratios = config['model']['ratios']
-    ratio_map = {k:v for k,v in zip(ratios, range(len(ratios)))}
-    model = fcn_resnet50(num_classes=len(ratios))
+    ratios = config["model"]["ratios"]
+    if ratios is not None:
+        ratio_map = {k:v for k,v in zip(ratios, range(len(ratios)))}
+    model = fcn_resnet50(num_classes=len(ratios) if ratios is not None else 1)
     checkpoint = torch.load(osp.join(config['model']['path'], 'model_best.pth.tar'))
     model.load_state_dict(checkpoint['model_state_dict'])
     if cuda:
@@ -206,15 +212,13 @@ if __name__ == "__main__":
 
     # 2. dataset
     root = config['dataset']['path']
-    kwargs = {'num_workers': 4, 'pin_memory': True} if cuda else {}
-    test_set = FCNRatioDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
+    kwargs = {'num_workers': 4, 'pin_memory': False} if cuda else {}
+    if ratios is not None:
+        test_set = FCNRatioDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
                                mean=config['dataset']['mean'], ratio_map=ratio_map, transform=True)
+    else:
+        test_set = FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
+                               mean=config['dataset']['mean'], max_ind=config["dataset"]["max_ind"], transform=True)
     data_loader = torch.utils.data.DataLoader(test_set, batch_size=config['model']['batch_size'], shuffle=False, **kwargs)
 
-    # If using mixed precision training, initialize here
-    if APEX_AVAILABLE and False:
-        model = amp.initialize(
-            model, opt_level="O1")
-        amp.load_state_dict(checkpoint['amp'])
-
-    benchmark(output_dir, model, data_loader, config, cuda=cuda, use_amp=APEX_AVAILABLE and False)
+    benchmark(output_dir, model, data_loader, config, cuda=cuda)
