@@ -5,18 +5,18 @@ model:
   # ratios: [1,2,3,5,10]
   ratios: null
   max_iteration: 50000       # number of epochs to train for
-  gpu: 1
-  batch_size: 4
+  gpu: 0
+  batch_size: 48 
   lr: 1e-4
   momentum: 0.99
   weight_decay: 0.0005
 
 dataset:
-  path: /datasets/dist_dataset
+  path: /dataset
   imgs: 'depth'
   lbls: 'dist'
   mean: [101.46017946, 101.46017946, 101.46017946]
-  max_ind: 10000
+  max_ind: 0
 
 # name of the config file to save (within the model folder)
 save_conf_name: 100k_shelf_test_docker.yaml

@@ -13,6 +13,7 @@ requirements = [
     'tqdm',
     'scikit-image',
     'autolab_core',
+    'prettytable',
 ]
 
 if "--list-reqs" in sys.argv:

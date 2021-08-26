@@ -21,19 +21,21 @@ from xray import FCNRatioDataset
 
 class Trainer(object):
 
-    def __init__(self, cuda, model, optimizer,
+    def __init__(self, cuda, model, optimizer, scaler,
                  train_loader, val_loader, out, max_iter,
-                 reduction='mean', interval_validate=None):
+                 reduction='mean', interval_validate=None, use_amp=False):
         self.cuda = cuda
 
         self.model = model
         self.optim = optimizer
+        self.scaler = scaler
 
         self.train_loader = train_loader
         self.val_loader = val_loader
 
         self.timestamp_start = datetime.datetime.now()
         self.reduction = reduction
+        self.use_amp = use_amp
 
         if interval_validate is None:
             self.interval_validate = len(self.train_loader)
@@ -72,12 +74,13 @@ class Trainer(object):
 
         val_loss = 0
         visualizations = []
-        label_trues, label_preds = [], []
+        batch_metrics = []
         for _, data in tqdm.tqdm(
                 enumerate(self.val_loader), total=len(self.val_loader),
                 desc='Valid iteration=%d' % self.iteration, ncols=80,
                 leave=False):
 
+            label_trues, label_preds = [], []
             if self.cuda:
                 data = [d.cuda() for d in data]
             data = [Variable(d) for d in data]
@@ -110,8 +113,9 @@ class Trainer(object):
                 if len(visualizations) < 9:
                     viz = utils.visualize_segmentation(lbl_pred=pred, lbl_true=lbl, img=img)
                     visualizations.append(viz)
+            batch_metrics.append(utils.label_accuracy_values(label_trues, label_preds))
         
-        metrics = utils.label_accuracy_score(label_trues, label_preds)
+        metrics = utils.label_accuracy_scores(*np.array(batch_metrics).sum(axis=0))
 
         out = osp.join(self.out, 'visualization_viz')
         if not osp.exists(out):
@@ -137,6 +141,7 @@ class Trainer(object):
             'iteration': self.iteration,
             'arch': self.model.__class__.__name__,
             'optim_state_dict': self.optim.state_dict(),
+            'scaler_state_dict': self.scaler.state_dict(),
             'model_state_dict': self.model.state_dict(),
             'best_mean_iou': self.best_mean_iou,
         }, osp.join(self.out, 'checkpoint.pth.tar'))
@@ -174,28 +179,34 @@ class Trainer(object):
             else:
                 imgs, lbls, ratios = data
             
-            self.optim.zero_grad()
-            score = self.model(imgs)
-            if isinstance(score, dict):
-                score = score['out']
-            if ratios is not None:
-                score = score.squeeze()[range(len(imgs)), ratios]
-            else:
-                score = score.squeeze()
+            with torch.cuda.amp.autocast(enabled=self.use_amp):
+                score = self.model(imgs)
+                if isinstance(score, dict):
+                    score = score['out']
+                if ratios is not None:
+                    score = score.squeeze()[range(len(imgs)), ratios]
+                else:
+                    score = score.squeeze()
 
-            loss = torch.nn.MSELoss()(score, lbls)
+                loss = torch.nn.MSELoss()(score, lbls)
+            
             loss_data = loss.data.item()
             if np.isnan(loss_data):
                 raise ValueError('loss is nan while training')
 
-            loss.backward()
-            self.optim.step()
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optim)
+            self.scaler.update()
+            self.optim.zero_grad()
+            
             loss_data /= len(score)
             train_bar.set_postfix_str('Loss: {:.3f}'.format(loss_data))
 
             lbls_pred = score.data.cpu().numpy()
             lbls_true = lbls.data.cpu().numpy()
-            metrics = utils.label_accuracy_score(lbls_true, lbls_pred)
+
+            batch_metrics = utils.label_accuracy_values(lbls_true, lbls_pred)
+            metrics = utils.label_accuracy_scores(*batch_metrics)
 
             with open(osp.join(self.out, 'log.csv'), 'a') as f:
                 elapsed_time = (
@@ -224,11 +235,13 @@ if __name__ == "__main__":
     conf_parser.add_argument("--config", action="store", default="cfg/train_fcn.yaml",
                                dest="conf_file", type=str, help="path to the configuration file")
     conf_parser.add_argument("--resume", action="store_true", help='resume previous training')
+    conf_parser.add_argument("--use_amp", action="store_true", help="use automatic mixed precision during training")
     conf_args = conf_parser.parse_args()
 
     # read in config file information from proper section
     config = YamlConfig(conf_args.conf_file)
     resume = conf_args.resume
+    use_amp = conf_args.use_amp
 
     out = osp.join(config['model']['path'], config['model']['name'])
     interactive = bool(hasattr(sys, 'ps1'))
@@ -271,7 +284,7 @@ if __name__ == "__main__":
 
     # 2. dataset
     root = config['dataset']['path']
-    kwargs = {'num_workers': 4, 'pin_memory': False} if cuda else {}
+    kwargs = {'num_workers': 12, 'pin_memory': False} if cuda else {}
     if ratios is not None:
         train_set = FCNRatioDataset(root, split='train', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
                                     mean=config['dataset']['mean'], max_ind=config['dataset']['max_ind'], ratio_map=ratio_map,
@@ -295,17 +308,22 @@ if __name__ == "__main__":
         lr=config['model']['lr'],
         momentum=config['model']['momentum'],
         weight_decay=config['model']['weight_decay'])
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     if resume:
         optim.load_state_dict(checkpoint['optim_state_dict'])
+        if "scaler_state_dict" in checkpoint:
+            scaler.load_state_dict(checkpoint["scaler_state_dict"])
 
     trainer = Trainer(
         cuda=cuda,
         model=model,
         optimizer=optim,
+        scaler=scaler,
         train_loader=train_loader,
         val_loader=val_loader,
         out=out,
         max_iter=config['model']['max_iteration'],
+        use_amp=use_amp
     )
     trainer.epoch = start_epoch
     trainer.iteration = start_iteration
