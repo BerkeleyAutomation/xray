@@ -6,7 +6,7 @@ model:
   # ratios: null
   max_iteration: 50000       # number of epochs to train for
   gpu: 0
-  batch_size: 4
+  batch_size: 8
   lr: 1e-4
   momentum: 0.99
   weight_decay: 0.0005
@@ -16,7 +16,7 @@ dataset:
   imgs: 'depth'
   lbls: 'dist'
   mean: [130.55814574, 130.55814574, 130.55814574]
-  max_ind: 10000
+  max_ind: 0
 
 # name of the config file to save (within the model folder)
 save_conf_name: 15k_shelf_test_docker.yaml
