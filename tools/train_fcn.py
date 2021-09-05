@@ -72,12 +72,13 @@ class Trainer(object):
 
         val_loss = 0
         visualizations = []
-        label_trues, label_preds = [], []
+        batch_metrics = []
         for _, data in tqdm.tqdm(
                 enumerate(self.val_loader), total=len(self.val_loader),
                 desc='Valid iteration=%d' % self.iteration, ncols=80,
                 leave=False):
 
+            label_trues, label_preds = [], []
             if self.cuda:
                 data = [d.cuda() for d in data]
             data = [Variable(d) for d in data]
@@ -110,8 +111,9 @@ class Trainer(object):
                 if len(visualizations) < 9:
                     viz = utils.visualize_segmentation(lbl_pred=pred, lbl_true=lbl, img=img)
                     visualizations.append(viz)
+            batch_metrics.append(utils.label_accuracy_values(label_trues, label_preds))
         
-        metrics = utils.label_accuracy_score(label_trues, label_preds)
+        metrics = utils.label_accuracy_scores(*np.array(batch_metrics).sum(axis=0))
 
         out = osp.join(self.out, 'visualization_viz')
         if not osp.exists(out):
@@ -195,7 +197,7 @@ class Trainer(object):
 
             lbls_pred = score.data.cpu().numpy()
             lbls_true = lbls.data.cpu().numpy()
-            metrics = utils.label_accuracy_score(lbls_true, lbls_pred)
+            metrics = utils.label_accuracy_scores(*utils.label_accuracy_values(lbls_true, lbls_pred))
 
             with open(osp.join(self.out, 'log.csv'), 'a') as f:
                 elapsed_time = (
@@ -277,15 +279,15 @@ if __name__ == "__main__":
                                     mean=config['dataset']['mean'], max_ind=config['dataset']['max_ind'], ratio_map=ratio_map,
                                     transform=True)
         val_set = FCNRatioDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
-                                mean=config['dataset']['mean'], max_ind=config['dataset']['max_ind'], ratio_map=ratio_map,
-                                transform=True)
+                                  mean=config['dataset']['mean'], max_ind=config['dataset']['max_ind'], ratio_map=ratio_map,
+                                  transform=True)
     else:
         train_set = FCNDataset(root, split='train', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
-                                    mean=config['dataset']['mean'], max_ind=config['dataset']['max_ind'],
-                                    transform=True)
+                               mean=config['dataset']['mean'], max_ind=config['dataset']['max_ind'],
+                               transform=True)
         val_set = FCNDataset(root, split='test', imgs=config['dataset']['imgs'], lbls=config['dataset']['lbls'], 
-                                mean=config['dataset']['mean'], max_ind=config['dataset']['max_ind'],
-                                transform=True)
+                             mean=config['dataset']['mean'], max_ind=config['dataset']['max_ind'],
+                             transform=True)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
     val_loader = torch.utils.data.DataLoader(val_set, batch_size=config['model']['batch_size'], shuffle=True, **kwargs)
 

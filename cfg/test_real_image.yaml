@@ -1,0 +1,5 @@
+mean_bgr: [101.46, 101.46, 101.46]
+dataset: test_images/depth
+model:
+  path: models/test
+  gpu: 1

@@ -160,11 +160,13 @@ class FCNRatioDataset(data.Dataset):
         for i in inds:
             if ratio_map is not None:
                 for r in ratio_map:
-                    self.files[split].append({
-                        'img': osp.join(root, imgs, 'image_{:06d}_{:02d}.png'.format(i, r)),
-                        'lbl': osp.join(root, lbls, 'image_{:06d}_{:02d}.png'.format(i, r)),
-                        'ratio': ratio_map[r]
-                    })
+                    im_path = osp.join(root, imgs, 'image_{:06d}_{:02d}.png'.format(i, r))
+                    if osp.exists(im_path):
+                        self.files[split].append({
+                            'img': im_path,
+                            'lbl': osp.join(root, lbls, 'image_{:06d}_{:02d}.png'.format(i, r)),
+                            'ratio': ratio_map[r]
+                        })
             else:
                 img_files = glob.glob(osp.join(root, imgs, 'image_{:06d}_*.png'.format(i)))
                 lbl_files = glob.glob(osp.join(root, lbls, 'image_{:06d}_*.png'.format(i)))
