@@ -1,5 +1,7 @@
-mean_bgr: [101.46, 101.46, 101.46]
+# mean_bgr: [101.46, 101.46, 101.46]
+mean_bgr: [130.55814574, 130.55814574, 130.55814574]
+ratios: [1,2,3]
 dataset: test_images/depth
 model:
-  path: models/test
+  path: models/test_docker
   gpu: 1

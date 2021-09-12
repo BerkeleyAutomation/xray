@@ -1,21 +1,13 @@
 import matplotlib.pyplot as plt
-import datetime
-import math
 import os
 import os.path as osp
-import shutil
 import argparse
 import numpy as np
 import skimage.io
 import torch
-from torch.autograd import Variable
-import tqdm
 from torchvision.models.segmentation import fcn_resnet50
 from autolab_core import YamlConfig, Logger
-from autolab_core.utils import keyboard_input
-from prettytable import PrettyTable
 import cv2
-from autolab_core import ColorImage
 
 
 def cv2_clipped_zoom(img, zoom_factor):
@@ -81,23 +73,29 @@ if __name__ == "__main__":
         torch.backends.cudnn.benchmark = True
 
     # 1. model
-    model = fcn_resnet50(num_classes=1)
+    ratios = config["ratios"]
+    model = fcn_resnet50(num_classes=len(ratios) if ratios is not None else 1)
     checkpoint = torch.load(osp.join(config['model']['path'], 'model_best.pth.tar'))
     model.load_state_dict(checkpoint['model_state_dict'])
     if cuda:
         model = model.cuda()
 
     # 2. files
-    image_fns = [osp.join(config["dataset"], f) for f in os.listdir(config["dataset"])]
-    
-    model.eval()
-    for im in image_fns:
-        # Read frame from camera and convert
-        depth_im = skimage.io.imread(im)
-        depth_im = cv2.resize(depth_im, (512, 384))
+    depth_image_fns = sorted([osp.join(config["dataset"], f) for f in os.listdir(config["dataset"]) if "Depth" in f])
+    color_image_fns = sorted([osp.join(config["dataset"], f) for f in os.listdir(config["dataset"]) if "Color" in f])
+    results_folder = osp.join(config["dataset"], "results")
+    if not osp.exists(results_folder):
+        os.makedirs(results_folder)
 
-        img = depth_im[:,:, ::-1]  # RGB -> BGR
-        img = img.astype(np.float64)
+    model.eval()
+    for c_fn, d_fn in zip(color_image_fns, depth_image_fns):
+        # Read frame from camera and convert
+        color_im = skimage.io.imread(c_fn)
+        depth_im = skimage.io.imread(d_fn)
+        color_im = cv2.resize(color_im, (640, 480))
+        depth_im = cv2.resize(depth_im, (640, 480))
+
+        img = depth_im.astype(np.float64)
         img -= np.array(config["mean_bgr"])
         img = img.transpose(2, 0, 1)
         img = torch.from_numpy(img[None,...]).float()        
@@ -109,21 +107,16 @@ if __name__ == "__main__":
         with torch.no_grad():
             score = model(img)
         score = score['out'].squeeze()
+        score /= score.max()
         # score = cv2_clipped_zoom(score.cpu()[None,...], config['scale'])
         # img = cv2_clipped_zoom(img.cpu(), config['scale'])
 
-        img = img.cpu().numpy().squeeze()
-        img = img.transpose(1, 2, 0)
-        img += np.array(config["mean_bgr"])
-        img = img.astype(np.uint8)
-        img = img[:, :, ::-1]
-
-        plt.figure()
+        plt.figure(frameon=False)
         # plt.subplot(2,2,1)
-        # plt.imshow(img)
+        plt.imshow(depth_im)
         # plt.axis('off')
         # plt.subplot(2,2,2)
-        plt.imshow(score.squeeze().cpu().numpy(), cmap='jet')
+        plt.imshow(score[0].squeeze().cpu().numpy(), cmap='jet', alpha=0.5)
         plt.axis('off')
         # plt.subplot(2,2,3)
         #plt.imshow(color_im)
@@ -133,7 +126,9 @@ if __name__ == "__main__":
         #plt.imshow(score.squeeze().numpy(), cmap='jet', alpha=0.5)
         #plt.axis('off')
         # plt.subplots_adjust(left=0.02, right=0.98, bottom=0.02, top=0.98, wspace=0.02, hspace=0.02)
-        plt.savefig(osp.join(config["dataset"], f"result_{osp.basename(osp.splitext(im)[0])}.png"))
-        plt.figure()
-        plt.bar(np.arange(512), 384 * score.cpu().numpy().sum(axis=0) / score.cpu().numpy().sum(axis=0).max(), width=1.0)
-        plt.savefig(osp.join(config["dataset"], f"result1d_{osp.basename(osp.splitext(im)[0])}.png"))
+        plt.savefig(osp.join(results_folder, f"result_{osp.basename(osp.splitext(c_fn)[0])}.png"))
+        plt.figure(frameon=False)
+        plt.imshow(depth_im)
+        plt.bar(np.arange(640), -480 * score[0].cpu().numpy().sum(axis=0) / score[0].cpu().numpy().sum(axis=0).max(), width=1.0, alpha=0.5, bottom=480)
+        plt.axis('off')
+        plt.savefig(osp.join(results_folder, f"result1d_{osp.basename(osp.splitext(c_fn)[0])}.png"))

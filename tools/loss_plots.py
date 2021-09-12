@@ -22,7 +22,6 @@ if __name__ == '__main__':
     f2, axes2 = plt.subplots(2, 2, figsize=(12.8, 9.6))
 
     for csvf in args.csv_file:
-        import pdb; pdb.set_trace()
         data = pd.read_csv(csvf)
         # data = data[np.logical_and(data['iteration'] % args.sample == 0, data['iteration'] > 10)]
 
