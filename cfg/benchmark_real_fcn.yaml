@@ -1,9 +1,0 @@
-phoxi_name: '2018-02-020-LC3'
-device_id: 0
-scale: 2
-mean: [0.0, 181.0, 181.0]
-
-model:
-  type: fcn
-  path: /nfs/diskstation/projects/mech_search/prob_pose/models/box_1_combo_fcn_2_22/
-  gpu: 1

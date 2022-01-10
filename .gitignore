@@ -6,6 +6,7 @@ __pycache__/
 # datasets and models
 datasets/
 models/
+benchmark/
 PhotoneoLogFiles
 
 # C extensions

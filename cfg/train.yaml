@@ -1,0 +1,18 @@
+model:
+  name: my_model
+  path: models
+  ratios: [1, 2, 3, 5, 10]
+  epochs: 100
+  device: cuda:0
+  batch_size: 8
+  lr: 1e-4
+  momentum: 0.99
+  weight_decay: 0.0005
+
+dataset:
+  num_workers: 12
+  path: datasets/example_dataset
+  imgs: 'combo_ims'
+  lbls: 'dist_ims'
+  mean: [180.614705, 180.614705, 0.0624726135]
+  max_ind: 0
