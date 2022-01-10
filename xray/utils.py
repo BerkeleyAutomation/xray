@@ -1,3 +1,109 @@
+import copy
+import math
+import os
+import random
+import warnings
+from distutils.version import LooseVersion
+
+import cv2
+import numpy as np
+import scipy.ndimage
+import skimage
+import skimage.transform
+import torch
+from matplotlib.pyplot import cm
+
+
+def transform(img, mean_bgr):
+    img = img[:, :, ::-1] - mean_bgr  # RGB -> BGR
+    img = img.transpose(2, 0, 1)
+    return img
+
+
+def untransform(img, mean_bgr):
+    img = img.transpose(1, 2, 0) + mean_bgr
+    img = img[:, :, ::-1].astype(np.uint8)  # BGR -> RGB
+    return img
+
+
+def cv2_clipped_zoom(img, zoom_factor):
+    """
+    Center zoom in/out of the given image and returning an enlarged/shrinked view of
+    the image without changing dimensions
+    Args:
+        img : Image array
+        zoom_factor : amount of zoom as a ratio (0 to Inf)
+    """
+    if zoom_factor == 1:
+        return img
+
+    height, width = img.shape[-2:]  # It's also the final desired shape
+    new_height, new_width = int(height * zoom_factor), int(width * zoom_factor)
+
+    ### Crop only the part that will remain in the result (more efficient)
+    # Centered bbox of the final desired size in resized (larger/smaller) image coordinates
+    y1, x1 = max(0, new_height - height) // 2, max(0, new_width - width) // 2
+    y2, x2 = y1 + height, x1 + width
+    bbox = np.array([y1, x1, y2, x2])
+    # Map back to original image coordinates
+    bbox = (bbox / zoom_factor).astype(np.int)
+    y1, x1, y2, x2 = bbox
+    cropped_img = img.numpy()[..., y1:y2, x1:x2]
+    cropped_img = cropped_img.reshape((-1, *cropped_img.shape[-2:])).transpose(1, 2, 0)
+
+    # Handle padding when downscaling
+    resize_height, resize_width = min(new_height, height), min(new_width, width)
+    pad_height1, pad_width1 = (height - resize_height) // 2, (width - resize_width) // 2
+    pad_height2, pad_width2 = (height - resize_height) - pad_height1, (width - resize_width) - pad_width1
+    pad_spec = [(pad_height1, pad_height2), (pad_width1, pad_width2), (0, 0)]
+
+    result = cv2.resize(cropped_img, (resize_width, resize_height))
+    result = np.pad(result, pad_spec[: result.ndim], mode="edge")
+    assert result.shape[0] == height and result.shape[1] == width
+    if result.ndim == 3:
+        result = result.transpose(2, 0, 1)
+    return torch.from_numpy(result.reshape(img.shape)).float()
+
+
+def mkdir_if_missing(output_dir):
+    if not os.path.exists(output_dir):
+        try:
+            os.makedirs(output_dir)
+        except:
+            print(
+                "Something went wrong in mkdir_if_missing. "
+                "Probably some other process created the directory already."
+            )
+
+
+# -----------------------------------------------------------------------------
+# Evaluation functions
+# -----------------------------------------------------------------------------
+def label_accuracy_values(label_trues, label_preds, pos_thresh=25.5, diff_thresh=51):
+    """Returns accuracy score evaluation result.
+
+    - mean accuracy
+    - mean IoU
+    - balanced accuracy
+    """
+    lp = np.array(label_preds)
+    lt = np.array(label_trues)
+
+    true_pos = np.sum(np.logical_and(np.abs(lp - lt) < diff_thresh, lt > pos_thresh))
+    true_neg = np.sum(np.logical_and(np.abs(lp - lt) < diff_thresh, lt <= pos_thresh))
+    num_pred_pos = np.sum(lt > pos_thresh)
+    num_total_pos = np.sum(np.logical_or(lt > pos_thresh, lp > pos_thresh))
+    return true_pos, true_neg, num_pred_pos, num_total_pos, lt.size
+
+
+def label_accuracy_scores(true_pos, true_neg, num_pred_pos, num_total_pos, total_size):
+    acc = (true_pos + true_neg) / total_size
+    bal_acc = 0.5 * ((true_pos / num_pred_pos) + (true_neg / (total_size - num_pred_pos)))
+    iou = true_pos / num_total_pos
+
+    return acc, bal_acc, iou
+
+
 """
 Mask R-CNN
 Common utility functions and classes.
@@ -6,30 +112,6 @@ Copyright (c) 2017 Matterport, Inc.
 Licensed under the MIT License (see LICENSE for details)
 Written by Waleed Abdulla
 """
-from __future__ import division
-import os
-import math
-import random
-import numpy as np
-import tensorflow as tf
-import scipy.ndimage
-from matplotlib.pyplot import cm
-import skimage
-import skimage.transform
-import copy
-import six
-import urllib.request
-import shutil
-import warnings
-from distutils.version import LooseVersion
-
-def mkdir_if_missing(output_dir):
-    if not os.path.exists(output_dir):
-        try:
-            os.makedirs(output_dir)
-        except:
-            print("Something went wrong in mkdir_if_missing. "
-                  "Probably some other process created the directory already.")
 
 
 def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square"):
@@ -93,8 +175,7 @@ def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square
 
     # Resize image using bilinear interpolation
     if scale != 1:
-        image = resize(image, (round(h * scale), round(w * scale)),
-                       preserve_range=True)
+        image = resize(image, (round(h * scale), round(w * scale)), preserve_range=True)
 
     # Need padding or cropping?
     if mode == "square":
@@ -107,7 +188,7 @@ def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square
         padding = [(top_pad, bottom_pad), (left_pad, right_pad)]
         if image.ndim == 3:
             padding.append((0, 0))
-        image = np.pad(image, padding, mode='constant', constant_values=0)
+        image = np.pad(image, padding, mode="constant", constant_values=0)
         window = (top_pad, left_pad, h + top_pad, w + left_pad)
     elif mode == "pad64":
         h, w = image.shape[:2]
@@ -130,7 +211,7 @@ def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square
         padding = [(top_pad, bottom_pad), (left_pad, right_pad)]
         if image.ndim == 3:
             padding.append((0, 0))
-        image = np.pad(image, padding, mode='constant', constant_values=0)
+        image = np.pad(image, padding, mode="constant", constant_values=0)
         window = (top_pad, left_pad, h + top_pad, w + left_pad)
     elif mode == "crop":
         # Pick a random crop
@@ -138,10 +219,10 @@ def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square
         y = random.randint(0, (h - min_dim))
         x = random.randint(0, (w - min_dim))
         crop = (y, x, min_dim, min_dim)
-        image = image[y:y + min_dim, x:x + min_dim]
+        image = image[y : y + min_dim, x : x + min_dim]
         window = (0, 0, min_dim, min_dim)
     else:
-        raise Exception("Mode {} not supported".format(mode))
+        raise Exception(f"Mode {mode} not supported")
     return image.astype(image_dtype), window, scale, padding, crop
 
 
@@ -161,17 +242,28 @@ def resize_dist(dist, scale, padding, crop=None):
         dist = scipy.ndimage.zoom(dist, zoom=[scale, scale, 1], order=0)
     if crop is not None:
         y, x, h, w = crop
-        dist = dist[y:y + h, x:x + w]
+        dist = dist[y : y + h, x : x + w]
     else:
-        dist = np.pad(dist, padding, mode='constant', constant_values=0)
+        dist = np.pad(dist, padding, mode="constant", constant_values=0)
     return dist
+
 
 ############################################################
 #  Miscellaneous
 ############################################################
 
-def resize(image, output_shape, order=1, mode='constant', cval=0, clip=True,
-           preserve_range=False, anti_aliasing=False, anti_aliasing_sigma=None):
+
+def resize(
+    image,
+    output_shape,
+    order=1,
+    mode="constant",
+    cval=0,
+    clip=True,
+    preserve_range=False,
+    anti_aliasing=False,
+    anti_aliasing_sigma=None,
+):
     """A wrapper for Scikit-Image resize().
 
     Scikit-Image generates warnings on every call to resize() if it doesn't
@@ -183,42 +275,20 @@ def resize(image, output_shape, order=1, mode='constant', cval=0, clip=True,
         # New in 0.14: anti_aliasing. Default it to False for backward
         # compatibility with skimage 0.13.
         return skimage.transform.resize(
-            image, output_shape,
-            order=order, mode=mode, cval=cval, clip=clip,
-            preserve_range=preserve_range, anti_aliasing=anti_aliasing,
-            anti_aliasing_sigma=anti_aliasing_sigma)
+            image,
+            output_shape,
+            order=order,
+            mode=mode,
+            cval=cval,
+            clip=clip,
+            preserve_range=preserve_range,
+            anti_aliasing=anti_aliasing,
+            anti_aliasing_sigma=anti_aliasing_sigma,
+        )
     else:
         return skimage.transform.resize(
-            image, output_shape,
-            order=order, mode=mode, cval=cval, clip=clip,
-            preserve_range=preserve_range)
-
-# -----------------------------------------------------------------------------
-# Evaluation
-# -----------------------------------------------------------------------------
-def label_accuracy_score(label_trues, label_preds, pos_thresh=25.5, diff_thresh=51):
-    """Returns accuracy score evaluation result.
-
-      - mean accuracy
-      - mean IoU
-      - balanced accuracy
-    """
-    # lp = np.array(label_preds) >= threshold
-    # lt = np.array(label_trues) > 0
-    lp = np.array(label_preds)
-    lt = np.array(label_trues)
-    
-    # true_pos = np.sum(np.logical_and(lt, lp))
-    # true_neg = np.sum(np.logical_and(~lt, ~lp))
-    true_pos = np.sum(np.logical_and(np.abs(lp - lt) < diff_thresh, lt > pos_thresh))
-    true_neg = np.sum(np.logical_and(np.abs(lp - lt) < diff_thresh, lt <= pos_thresh))
-    num_pos = np.sum(lt > pos_thresh)
-    
-    acc = (true_pos + true_neg) / lt.size
-    bal_acc = 0.5 * ((true_pos / num_pos) + (true_neg / (lt.size - num_pos)))
-    iou = true_pos / np.sum(np.logical_or(lt > pos_thresh, lp > pos_thresh))
-    
-    return acc, bal_acc, iou
+            image, output_shape, order=order, mode=mode, cval=cval, clip=clip, preserve_range=preserve_range
+        )
 
 
 # -----------------------------------------------------------------------------
@@ -242,8 +312,7 @@ def centerize(src, dst_shape, margin_color=None):
         pad_vertical = (dst_h - h) // 2
     if w < dst_w:
         pad_horizontal = (dst_w - w) // 2
-    centerized[pad_vertical:pad_vertical + h,
-               pad_horizontal:pad_horizontal + w] = src
+    centerized[pad_vertical : pad_vertical + h, pad_horizontal : pad_horizontal + w] = src
     return centerized
 
 
@@ -267,16 +336,16 @@ def _tile_images(imgs, tile_shape, concatenated_image):
                 dtype=np.uint8,
             )
         else:
-            concatenated_image = np.zeros(
-                (one_height * y_num, one_width * x_num), dtype=np.uint8)
-    for y in six.moves.range(y_num):
-        for x in six.moves.range(x_num):
+            concatenated_image = np.zeros((one_height * y_num, one_width * x_num), dtype=np.uint8)
+    for y in range(y_num):
+        for x in range(x_num):
             i = x + y * x_num
             if i >= len(imgs):
                 pass
             else:
-                concatenated_image[y * one_height:(y + 1) * one_height,
-                                   x * one_width:(x + 1) * one_width] = imgs[i]
+                concatenated_image[y * one_height : (y + 1) * one_height, x * one_width : (x + 1) * one_width] = imgs[
+                    i
+                ]
     return concatenated_image
 
 
@@ -287,11 +356,12 @@ def get_tile_image(imgs, tile_shape=None, result_img=None, margin_color=None):
     @param tile_shape: shape for which images should be concatenated
     @param result_img: numpy array to put result image
     """
+
     def resize(*args, **kwargs):
         # anti_aliasing arg cannot be passed to skimage<0.14
         # use LooseVersion to allow 0.14dev.
-        if LooseVersion(skimage.__version__) < LooseVersion('0.14'):
-            kwargs.pop('anti_aliasing', None)
+        if LooseVersion(skimage.__version__) < LooseVersion("0.14"):
+            kwargs.pop("anti_aliasing", None)
         return skimage.transform.resize(*args, **kwargs)
 
     def get_tile_shape(img_num):
@@ -320,7 +390,7 @@ def get_tile_image(imgs, tile_shape=None, result_img=None, margin_color=None):
         img = resize(
             image=img,
             output_shape=(h, w),
-            mode='reflect',
+            mode="reflect",
             preserve_range=True,
             anti_aliasing=True,
         ).astype(dtype)
@@ -335,7 +405,7 @@ def get_tile_image(imgs, tile_shape=None, result_img=None, margin_color=None):
 def label2rgb(lbl, img=None, alpha=0.5, thresh_suppress=0):
 
     cmap = cm.jet
-    lbl_viz = cmap(lbl / lbl.max())[...,:-1]
+    lbl_viz = cmap(lbl / lbl.max())[..., :-1]
     lbl_viz = np.iinfo(np.uint8).max * lbl_viz
 
     if img is not None:
@@ -369,48 +439,40 @@ def visualize_segmentation(**kwargs):
     img_array: ndarray
         Visualized image.
     """
-    img = kwargs.pop('img', None)
-    targ = kwargs.pop('targ', None)
-    lbl_true = kwargs.pop('lbl_true', None)
-    lbl_pred = kwargs.pop('lbl_pred', None)
-    n_class = kwargs.pop('n_class', None)
-    label_names = kwargs.pop('label_names', None)
+    img = kwargs.pop("img", None)
+    lbl_true = kwargs.pop("lbl_true", None)
+    lbl_pred = kwargs.pop("lbl_pred", None)
     if kwargs:
-        raise RuntimeError(
-            'Unexpected keys in kwargs: {}'.format(kwargs.keys()))
+        raise RuntimeError(f"Unexpected keys in kwargs: {kwargs.keys()}")
 
     if lbl_true is None and lbl_pred is None:
-        raise ValueError('lbl_true or lbl_pred must be not None.')
+        raise ValueError("lbl_true or lbl_pred must be not None.")
 
     lbl_true = copy.deepcopy(lbl_true)
     lbl_pred = copy.deepcopy(lbl_pred)
 
     vizs = []
 
-    if targ is not None:
-        viz_trues = [targ, img]
-        viz_preds = [targ, img]
-    else:
-        viz_trues = [img]
-        viz_preds = [img]
-
     if lbl_true is not None:
-        viz_trues.extend([
+        viz_trues = [
+            img,
             label2rgb(lbl_true),
             label2rgb(lbl_true, img),
-        ])
+        ]
         vizs.append(get_tile_image(viz_trues, (1, len(viz_trues))))
 
     if lbl_pred is not None:
-        viz_preds.extend([
-            label2rgb(lbl_pred),
-            label2rgb(lbl_pred, img),
-        ])
-        vizs.append(get_tile_image(viz_preds, (1, len(viz_preds))))
+        if isinstance(lbl_pred, np.ndarray) and lbl_pred.ndim == 2:
+            lbl_pred = [lbl_pred]
+        for lp in lbl_pred:
+            viz_preds = [
+                img,
+                label2rgb(lp),
+                label2rgb(lp, img),
+            ]
+            vizs.append(get_tile_image(viz_preds, (1, len(viz_preds))))
 
     if len(vizs) == 1:
         return vizs[0]
-    elif len(vizs) == 2:
-        return get_tile_image(vizs, (2, 1))
     else:
-        raise RuntimeError
+        return get_tile_image(vizs, (len(vizs), 1))
