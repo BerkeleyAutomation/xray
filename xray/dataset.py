@@ -49,11 +49,13 @@ class XrayDataset(data.Dataset):
         # load image
         img_file = data_file["img"]
         img = imread(img_file)
+        img = np.array(img)
         img = utils.transform(img, self.mean_bgr)
 
         # load label
         lbl_file = data_file["lbl"]
         lbl = imread(lbl_file)
+        lbl = np.array(lbl)
 
         ratio = data_file["ratio"]
         return img, lbl, ratio

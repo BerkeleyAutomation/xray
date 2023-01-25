@@ -1,7 +1,7 @@
 model:
-  name: my_model
+  name: sss_model
   path: models
-  ratios: [1, 2, 3, 5, 10]
+  ratios: [0, 1, 2]
   epochs: 100
   device: cuda:0
   batch_size: 8
@@ -10,9 +10,9 @@ model:
   weight_decay: 0.0005
 
 dataset:
-  num_workers: 12
-  path: datasets/example_dataset
-  imgs: 'combo_ims'
-  lbls: 'dist_ims'
+  num_workers: 0
+  path: /home/qingh097/slaxray/laxray-sim/dataset/d445_dataset_10000
+  imgs: 'depth'
+  lbls: 'dist'
   mean: [180.614705, 180.614705, 0.0624726135]
   max_ind: 0
